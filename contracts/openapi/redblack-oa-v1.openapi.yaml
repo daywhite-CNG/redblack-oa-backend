@@ -1,0 +1,3592 @@
+openapi: 3.0.3
+info:
+  title: Red&Black OA API
+  version: 1.0.0
+  description: |
+    Red&Black 中小企业 OA V1 通过 gateway-service 暴露的浏览器 HTTP 接口契约。
+    项目只在局域网 Linux 虚拟机运行，不包含公网生产部署接口。
+    微服务内部接口与 Kafka 事件契约见 docs/接口文档.md，不属于本 OpenAPI。
+    附件正文保存在阿里云 OSS 私有 Bucket，但浏览器只调用本 OpenAPI 定义的受控文件接口。
+    所有 ID 均以十进制字符串传输，所有日期时间均使用包含时区的 ISO 8601 格式。
+servers:
+  - url: http://192.168.12.131/api/v1
+    description: 局域网虚拟机固定访问地址
+  - url: /api/v1
+    description: 通过虚拟机 Nginx 和 gateway-service 访问的同源 API
+tags:
+  - name: Auth
+    description: 登录与会话
+  - name: Account
+    description: 个人中心
+  - name: Workbench
+    description: 工作台聚合视图
+  - name: Users
+    description: 用户管理
+  - name: Departments
+    description: 部门管理
+  - name: Roles
+    description: 角色与权限
+  - name: Menus
+    description: 菜单与按钮权限
+  - name: LeaveApplications
+    description: 请假申请
+  - name: ApprovalTasks
+    description: 审批任务
+  - name: Notices
+    description: 公告
+  - name: Notifications
+    description: 站内通知
+  - name: Files
+    description: 附件
+  - name: OperationLogs
+    description: 操作日志
+security:
+  - bearerAuth: []
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: 用户登录
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: 令牌加入 Redis 失效集合并结束会话
+      operationId: logout
+      responses:
+        '204':
+          description: 退出成功
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: 获取当前用户、权限和菜单
+      operationId: getCurrentUser
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /account/profile:
+    get:
+      tags: [Account]
+      summary: 获取个人资料
+      operationId: getMyProfile
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      tags: [Account]
+      summary: 修改个人资料
+      operationId: updateMyProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /account/password:
+    put:
+      tags: [Account]
+      summary: 修改自己的密码
+      operationId: changeMyPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: 修改成功，前端应清除令牌并重新登录
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /workbench:
+    get:
+      tags: [Workbench]
+      summary: 获取当前用户工作台聚合数据
+      operationId: getWorkbench
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkbenchResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /users:
+    get:
+      tags: [Users]
+      summary: 分页查询用户
+      operationId: listUsers
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - name: keyword
+          in: query
+          schema:
+            type: string
+            maxLength: 50
+          description: 姓名、账号或手机号关键字
+        - name: departmentId
+          in: query
+          schema:
+            $ref: '#/components/schemas/Id'
+        - name: roleId
+          in: query
+          schema:
+            $ref: '#/components/schemas/Id'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/EnabledStatus'
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Users]
+      summary: 新增用户
+      operationId: createUser
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: 创建成功
+          headers:
+            Location:
+              schema:
+                type: string
+              description: 新用户资源地址
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /users/options:
+    get:
+      tags: [Users]
+      summary: 查询用户选择器选项
+      operationId: listUserOptions
+      parameters:
+        - name: keyword
+          in: query
+          schema:
+            type: string
+            maxLength: 50
+        - name: departmentId
+          in: query
+          schema:
+            $ref: '#/components/schemas/Id'
+        - name: enabledOnly
+          in: query
+          schema:
+            type: boolean
+            default: true
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserOptionListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /users/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [Users]
+      summary: 获取用户详情
+      operationId: getUser
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Users]
+      summary: 编辑用户
+      operationId: updateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags: [Users]
+      summary: 删除无业务关联用户
+      operationId: deleteUser
+      parameters:
+        - name: version
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '204':
+          description: 删除成功
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /users/{userId}/status:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    patch:
+      tags: [Users]
+      summary: 启用或禁用用户
+      operationId: changeUserStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeStatusRequest'
+      responses:
+        '200':
+          description: 状态更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /users/{userId}/reset-password:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    post:
+      tags: [Users]
+      summary: 重置用户密码
+      operationId: resetUserPassword
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: 重置成功；临时密码仅返回一次
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResetPasswordResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /departments/tree:
+    get:
+      tags: [Departments]
+      summary: 获取部门树
+      operationId: getDepartmentTree
+      parameters:
+        - name: enabledOnly
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepartmentTreeResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /departments:
+    post:
+      tags: [Departments]
+      summary: 新增部门
+      operationId: createDepartment
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDepartmentRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepartmentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /departments/{departmentId}:
+    parameters:
+      - $ref: '#/components/parameters/DepartmentId'
+    get:
+      tags: [Departments]
+      summary: 获取部门详情
+      operationId: getDepartment
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepartmentResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Departments]
+      summary: 编辑部门
+      operationId: updateDepartment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDepartmentRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepartmentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+    delete:
+      tags: [Departments]
+      summary: 删除空部门
+      operationId: deleteDepartment
+      parameters:
+        - name: version
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '204':
+          description: 删除成功
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /departments/{departmentId}/status:
+    parameters:
+      - $ref: '#/components/parameters/DepartmentId'
+    patch:
+      tags: [Departments]
+      summary: 启用或禁用部门
+      operationId: changeDepartmentStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeStatusRequest'
+      responses:
+        '200':
+          description: 状态更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepartmentResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /roles:
+    get:
+      tags: [Roles]
+      summary: 分页查询角色
+      operationId: listRoles
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: keyword
+          in: query
+          schema:
+            type: string
+            maxLength: 50
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/EnabledStatus'
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Roles]
+      summary: 新增角色
+      operationId: createRole
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRoleRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /roles/{roleId}:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+    get:
+      tags: [Roles]
+      summary: 获取角色详情
+      operationId: getRole
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Roles]
+      summary: 编辑角色
+      operationId: updateRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRoleRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags: [Roles]
+      summary: 删除未使用角色
+      operationId: deleteRole
+      parameters:
+        - name: version
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '204':
+          description: 删除成功
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /roles/{roleId}/status:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+    patch:
+      tags: [Roles]
+      summary: 启用或禁用角色
+      operationId: changeRoleStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeStatusRequest'
+      responses:
+        '200':
+          description: 状态更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /roles/{roleId}/permissions:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+    get:
+      tags: [Roles]
+      summary: 获取角色权限和数据范围
+      operationId: getRolePermissions
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolePermissionResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Roles]
+      summary: 覆盖角色权限和数据范围
+      operationId: replaceRolePermissions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplaceRolePermissionsRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolePermissionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /roles/{roleId}/members:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+    get:
+      tags: [Roles]
+      summary: 分页查询角色成员
+      operationId: listRoleMembers
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /menus/tree:
+    get:
+      tags: [Menus]
+      summary: 获取完整菜单树
+      operationId: getMenuTree
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuTreeResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /menus:
+    post:
+      tags: [Menus]
+      summary: 新增菜单节点
+      operationId: createMenu
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMenuRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /menus/{menuId}:
+    parameters:
+      - $ref: '#/components/parameters/MenuId'
+    get:
+      tags: [Menus]
+      summary: 获取菜单详情
+      operationId: getMenu
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Menus]
+      summary: 编辑菜单
+      operationId: updateMenu
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMenuRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+    delete:
+      tags: [Menus]
+      summary: 删除未引用叶子菜单
+      operationId: deleteMenu
+      parameters:
+        - name: version
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '204':
+          description: 删除成功
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /menus/{menuId}/status:
+    parameters:
+      - $ref: '#/components/parameters/MenuId'
+    patch:
+      tags: [Menus]
+      summary: 启用或禁用菜单
+      operationId: changeMenuStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeStatusRequest'
+      responses:
+        '200':
+          description: 状态更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /leave-applications:
+    get:
+      tags: [LeaveApplications]
+      summary: 查询请假申请
+      operationId: listLeaveApplications
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - name: scope
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [mine, accessible]
+        - name: applicationNo
+          in: query
+          schema:
+            type: string
+            maxLength: 30
+        - name: applicantName
+          in: query
+          schema:
+            type: string
+            maxLength: 50
+        - name: departmentId
+          in: query
+          schema:
+            $ref: '#/components/schemas/Id'
+        - name: leaveType
+          in: query
+          schema:
+            $ref: '#/components/schemas/LeaveType'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/LeaveStatus'
+        - name: submittedFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: submittedTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaveApplicationListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [LeaveApplications]
+      summary: 创建请假草稿
+      operationId: createLeaveApplication
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveLeaveApplicationRequest'
+      responses:
+        '201':
+          description: 草稿创建成功
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaveApplicationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /leave-applications/{applicationId}:
+    parameters:
+      - $ref: '#/components/parameters/ApplicationId'
+    get:
+      tags: [LeaveApplications]
+      summary: 获取请假申请详情
+      operationId: getLeaveApplication
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaveApplicationResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [LeaveApplications]
+      summary: 编辑草稿、驳回单或撤回单
+      operationId: updateLeaveApplication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLeaveApplicationRequest'
+      responses:
+        '200':
+          description: 保存成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaveApplicationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+    delete:
+      tags: [LeaveApplications]
+      summary: 删除草稿或撤回单
+      operationId: deleteLeaveApplication
+      parameters:
+        - name: version
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '204':
+          description: 删除成功
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /leave-applications/{applicationId}/submit:
+    parameters:
+      - $ref: '#/components/parameters/ApplicationId'
+    post:
+      tags: [LeaveApplications]
+      summary: 提交或重新提交请假申请
+      operationId: submitLeaveApplication
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+      responses:
+        '200':
+          description: 提交成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaveSubmissionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /leave-applications/{applicationId}/withdraw:
+    parameters:
+      - $ref: '#/components/parameters/ApplicationId'
+    post:
+      tags: [LeaveApplications]
+      summary: 撤回审批中的申请
+      operationId: withdrawLeaveApplication
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WithdrawLeaveRequest'
+      responses:
+        '200':
+          description: 撤回成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaveSubmissionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /leave-applications/{applicationId}/timeline:
+    parameters:
+      - $ref: '#/components/parameters/ApplicationId'
+    get:
+      tags: [LeaveApplications]
+      summary: 获取按提交轮次分组的审批时间线
+      operationId: getLeaveApplicationTimeline
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalTimelineResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /approval-tasks:
+    get:
+      tags: [ApprovalTasks]
+      summary: 查询当前用户待办或已办任务
+      operationId: listApprovalTasks
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - name: view
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [pending, completed]
+        - name: applicationNo
+          in: query
+          schema:
+            type: string
+            maxLength: 30
+        - name: applicantName
+          in: query
+          schema:
+            type: string
+            maxLength: 50
+        - name: departmentId
+          in: query
+          schema:
+            $ref: '#/components/schemas/Id'
+        - name: leaveType
+          in: query
+          schema:
+            $ref: '#/components/schemas/LeaveType'
+        - name: urgency
+          in: query
+          schema:
+            $ref: '#/components/schemas/Urgency'
+        - name: processedFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: processedTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalTaskListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /approval-tasks/{taskId}:
+    parameters:
+      - $ref: '#/components/parameters/TaskId'
+    get:
+      tags: [ApprovalTasks]
+      summary: 获取审批任务详情
+      operationId: getApprovalTask
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalTaskResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /approval-tasks/{taskId}/approve:
+    parameters:
+      - $ref: '#/components/parameters/TaskId'
+    post:
+      tags: [ApprovalTasks]
+      summary: 同意审批任务
+      operationId: approveTask
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApproveTaskRequest'
+      responses:
+        '200':
+          description: 审批成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalActionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /approval-tasks/{taskId}/reject:
+    parameters:
+      - $ref: '#/components/parameters/TaskId'
+    post:
+      tags: [ApprovalTasks]
+      summary: 驳回审批任务
+      operationId: rejectTask
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectTaskRequest'
+      responses:
+        '200':
+          description: 驳回成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalActionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /approval-tasks/{taskId}/transfer:
+    parameters:
+      - $ref: '#/components/parameters/TaskId'
+    post:
+      tags: [ApprovalTasks]
+      summary: 转交审批任务
+      operationId: transferTask
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferTaskRequest'
+      responses:
+        '200':
+          description: 转交成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalActionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /notices:
+    get:
+      tags: [Notices]
+      summary: 查询公告
+      operationId: listNotices
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: view
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [published, manage]
+        - name: keyword
+          in: query
+          schema:
+            type: string
+            maxLength: 100
+        - name: type
+          in: query
+          schema:
+            $ref: '#/components/schemas/NoticeType'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/NoticeStatus'
+        - name: readStatus
+          in: query
+          schema:
+            type: string
+            enum: [READ, UNREAD]
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoticeListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Notices]
+      summary: 创建公告草稿
+      operationId: createNotice
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveNoticeRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoticeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /notices/{noticeId}:
+    parameters:
+      - $ref: '#/components/parameters/NoticeId'
+    get:
+      tags: [Notices]
+      summary: 获取公告详情
+      description: 此 GET 不产生已读副作用，前端随后调用 read 接口。
+      operationId: getNotice
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoticeResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Notices]
+      summary: 编辑公告
+      operationId: updateNotice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNoticeRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoticeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+    delete:
+      tags: [Notices]
+      summary: 删除公告草稿
+      operationId: deleteNotice
+      parameters:
+        - name: version
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '204':
+          description: 删除成功
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /notices/{noticeId}/publish:
+    parameters:
+      - $ref: '#/components/parameters/NoticeId'
+    post:
+      tags: [Notices]
+      summary: 发布公告
+      operationId: publishNotice
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+      responses:
+        '200':
+          description: 发布成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoticeResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /notices/{noticeId}/withdraw:
+    parameters:
+      - $ref: '#/components/parameters/NoticeId'
+    post:
+      tags: [Notices]
+      summary: 撤回公告
+      operationId: withdrawNotice
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NoticeWithdrawRequest'
+      responses:
+        '200':
+          description: 撤回成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoticeResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /notices/{noticeId}/pin:
+    parameters:
+      - $ref: '#/components/parameters/NoticeId'
+    patch:
+      tags: [Notices]
+      summary: 置顶或取消置顶
+      operationId: changeNoticePin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePinRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoticeResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /notices/{noticeId}/read:
+    parameters:
+      - $ref: '#/components/parameters/NoticeId'
+    post:
+      tags: [Notices]
+      summary: 将公告标记为已读
+      operationId: markNoticeRead
+      responses:
+        '204':
+          description: 已标记或原本已读
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: 查询当前用户通知
+      operationId: listNotifications
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: readStatus
+          in: query
+          schema:
+            type: string
+            enum: [READ, UNREAD]
+        - name: type
+          in: query
+          schema:
+            $ref: '#/components/schemas/NotificationType'
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /notifications/unread-count:
+    get:
+      tags: [Notifications]
+      summary: 获取当前用户未读通知数
+      operationId: getUnreadNotificationCount
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /notifications/{notificationId}/read:
+    parameters:
+      - $ref: '#/components/parameters/NotificationId'
+    post:
+      tags: [Notifications]
+      summary: 单条通知标记已读
+      operationId: markNotificationRead
+      responses:
+        '204':
+          description: 已标记或原本已读
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /notifications/read-all:
+    post:
+      tags: [Notifications]
+      summary: 当前用户全部通知标记已读
+      operationId: markAllNotificationsRead
+      responses:
+        '200':
+          description: 操作成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /files:
+    post:
+      tags: [Files]
+      summary: 上传临时附件
+      operationId: uploadFile
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: 上传成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /files/{fileId}:
+    parameters:
+      - $ref: '#/components/parameters/FileId'
+    get:
+      tags: [Files]
+      summary: 获取文件元数据
+      operationId: getFileMetadata
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Files]
+      summary: 删除本人未绑定临时文件
+      operationId: deleteTemporaryFile
+      responses:
+        '204':
+          description: 删除成功
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /files/{fileId}/content:
+    parameters:
+      - $ref: '#/components/parameters/FileId'
+    get:
+      tags: [Files]
+      summary: 下载附件
+      operationId: downloadFile
+      responses:
+        '200':
+          description: 文件二进制内容
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /operation-logs:
+    get:
+      tags: [OperationLogs]
+      summary: 分页查询操作日志
+      operationId: listOperationLogs
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - name: operatorName
+          in: query
+          schema:
+            type: string
+            maxLength: 50
+        - name: module
+          in: query
+          schema:
+            type: string
+            maxLength: 50
+        - name: operationType
+          in: query
+          schema:
+            type: string
+            maxLength: 50
+        - name: result
+          in: query
+          schema:
+            type: string
+            enum: [SUCCESS, FAILURE]
+        - name: operatedFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: operatedTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationLogListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /operation-logs/{logId}:
+    parameters:
+      - $ref: '#/components/parameters/LogId'
+    get:
+      tags: [OperationLogs]
+      summary: 获取操作日志详情
+      operationId: getOperationLog
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationLogResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        enum: [10, 20, 50, 100]
+        default: 20
+    Sort:
+      name: sort
+      in: query
+      schema:
+        type: string
+        example: createdAt,desc
+      description: 仅允许端点声明的白名单字段
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: 相同用户、方法、路径和请求体在有效期内复用首次结果
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    DepartmentId:
+      name: departmentId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    RoleId:
+      name: roleId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    MenuId:
+      name: menuId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    ApplicationId:
+      name: applicationId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    TaskId:
+      name: taskId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    NoticeId:
+      name: noticeId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    NotificationId:
+      name: notificationId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    FileId:
+      name: fileId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    LogId:
+      name: logId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+  responses:
+    BadRequest:
+      description: 请求参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: 未认证或会话失效
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: 权限不足
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: 资源不存在或对当前用户不可见
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: 资源版本、状态、唯一性或幂等冲突
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    UnprocessableEntity:
+      description: 请求格式正确但不满足业务规则
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    TooManyRequests:
+      description: 请求频率过高
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: 建议重试等待秒数
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    PayloadTooLarge:
+      description: 文件超过大小限制
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    UnsupportedMediaType:
+      description: 文件类型不支持
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ServiceUnavailable:
+      description: 外部依赖暂不可用，例如阿里云 OSS 无法访问
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    Id:
+      type: string
+      pattern: '^[1-9][0-9]*$'
+      example: '10001'
+    EnabledStatus:
+      type: string
+      enum: [ENABLED, DISABLED]
+    Gender:
+      type: string
+      enum: [MALE, FEMALE, UNSPECIFIED]
+    Urgency:
+      type: string
+      enum: [NORMAL, URGENT]
+    LeaveType:
+      type: string
+      enum: [ANNUAL, PERSONAL, SICK, MARRIAGE, MATERNITY, COMPENSATORY, OTHER]
+    LeaveStatus:
+      type: string
+      enum: [DRAFT, PENDING, APPROVED, REJECTED, WITHDRAWN]
+    ApprovalTaskStatus:
+      type: string
+      enum: [PENDING, APPROVED, REJECTED, TRANSFERRED, CANCELLED]
+    ApprovalAction:
+      type: string
+      enum: [CREATE, SUBMIT, APPROVE, REJECT, TRANSFER, WITHDRAW, RESUBMIT]
+    NoticeType:
+      type: string
+      enum: [COMPANY, POLICY, EVENT, URGENT]
+    NoticeStatus:
+      type: string
+      enum: [DRAFT, PUBLISHED, WITHDRAWN]
+    NoticeScopeType:
+      type: string
+      enum: [ALL, DEPARTMENTS]
+    NotificationType:
+      type: string
+      enum:
+        - APPROVAL_PENDING
+        - APPROVAL_APPROVED
+        - APPROVAL_REJECTED
+        - APPROVAL_TRANSFERRED
+        - APPLICATION_WITHDRAWN
+        - NOTICE_PUBLISHED
+        - SYSTEM
+    MenuType:
+      type: string
+      enum: [DIRECTORY, MENU, BUTTON]
+    DataScope:
+      type: string
+      enum: [ALL, DEPARTMENT, DEPARTMENT_AND_CHILDREN, SELF, CUSTOM]
+    FileStatus:
+      type: string
+      enum: [TEMPORARY, BOUND]
+    OperationResult:
+      type: string
+      enum: [SUCCESS, FAILURE]
+    ErrorDetail:
+      type: object
+      required: [reason]
+      properties:
+        field:
+          type: string
+          nullable: true
+        reason:
+          type: string
+    ErrorResponse:
+      type: object
+      required: [code, message, requestId, timestamp]
+      properties:
+        code:
+          type: string
+          example: VALIDATION_FAILED
+        message:
+          type: string
+          example: 请求参数校验失败
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/ErrorDetail'
+        requestId:
+          type: string
+          example: req_01K1ABCDEF
+        timestamp:
+          type: string
+          format: date-time
+    ResponseMeta:
+      type: object
+      required: [code, message, requestId, timestamp]
+      properties:
+        code:
+          type: string
+          enum: [OK]
+        message:
+          type: string
+        requestId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+    VersionRequest:
+      type: object
+      required: [version]
+      properties:
+        version:
+          type: integer
+          minimum: 1
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+        password:
+          type: string
+          minLength: 6
+          maxLength: 128
+          writeOnly: true
+        rememberMe:
+          type: boolean
+          default: false
+    TokenData:
+      type: object
+      required: [accessToken, tokenType, expiresIn]
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          enum: [Bearer]
+        expiresIn:
+          type: integer
+          minimum: 1
+          description: 访问令牌剩余有效秒数
+          example: 28800
+    DepartmentRef:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        name:
+          type: string
+    UserRef:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        name:
+          type: string
+        departmentId:
+          allOf:
+            - $ref: '#/components/schemas/Id'
+          nullable: true
+    RoleRef:
+      type: object
+      required: [id, code, name]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        code:
+          type: string
+        name:
+          type: string
+    CurrentUser:
+      type: object
+      required: [id, username, name, department, roles, permissions, menuTree]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        username:
+          type: string
+        name:
+          type: string
+        avatarUrl:
+          type: string
+          format: uri
+          nullable: true
+        department:
+          allOf:
+            - $ref: '#/components/schemas/DepartmentRef'
+          nullable: true
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleRef'
+        permissions:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+        menuTree:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuNode'
+    LoginData:
+      allOf:
+        - $ref: '#/components/schemas/TokenData'
+        - type: object
+          required: [user]
+          properties:
+            user:
+              $ref: '#/components/schemas/CurrentUser'
+    LoginResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/LoginData'
+    CurrentUserResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/CurrentUser'
+    User:
+      type: object
+      required:
+        - id
+        - username
+        - name
+        - gender
+        - department
+        - roles
+        - status
+        - createdAt
+        - updatedAt
+        - version
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        username:
+          type: string
+        name:
+          type: string
+        gender:
+          $ref: '#/components/schemas/Gender'
+        phone:
+          type: string
+          nullable: true
+        email:
+          type: string
+          format: email
+          nullable: true
+        avatarUrl:
+          type: string
+          format: uri
+          nullable: true
+        department:
+          $ref: '#/components/schemas/DepartmentRef'
+        leader:
+          allOf:
+            - $ref: '#/components/schemas/UserRef'
+          nullable: true
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleRef'
+        status:
+          $ref: '#/components/schemas/EnabledStatus'
+        remark:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          minimum: 1
+    UserResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/User'
+    UserPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        page:
+          type: integer
+          minimum: 1
+        pageSize:
+          type: integer
+        total:
+          type: integer
+          minimum: 0
+    UserListResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/UserPage'
+    UserOptionListResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/UserRef'
+    CreateUserRequest:
+      type: object
+      required: [username, name, password, gender, departmentId, roleIds, status]
+      properties:
+        username:
+          type: string
+          pattern: '^[A-Za-z][A-Za-z0-9._-]{2,49}$'
+        name:
+          type: string
+          minLength: 2
+          maxLength: 50
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+          writeOnly: true
+        gender:
+          $ref: '#/components/schemas/Gender'
+        phone:
+          type: string
+          pattern: '^1[3-9][0-9]{9}$'
+          nullable: true
+        email:
+          type: string
+          format: email
+          nullable: true
+        departmentId:
+          $ref: '#/components/schemas/Id'
+        leaderId:
+          allOf:
+            - $ref: '#/components/schemas/Id'
+          nullable: true
+        roleIds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Id'
+        status:
+          $ref: '#/components/schemas/EnabledStatus'
+        remark:
+          type: string
+          maxLength: 500
+          nullable: true
+    UpdateUserRequest:
+      type: object
+      required: [name, gender, departmentId, roleIds, status, version]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 50
+        gender:
+          $ref: '#/components/schemas/Gender'
+        phone:
+          type: string
+          pattern: '^1[3-9][0-9]{9}$'
+          nullable: true
+        email:
+          type: string
+          format: email
+          nullable: true
+        departmentId:
+          $ref: '#/components/schemas/Id'
+        leaderId:
+          allOf:
+            - $ref: '#/components/schemas/Id'
+          nullable: true
+        roleIds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Id'
+        status:
+          $ref: '#/components/schemas/EnabledStatus'
+        remark:
+          type: string
+          maxLength: 500
+          nullable: true
+        version:
+          type: integer
+          minimum: 1
+    UpdateProfileRequest:
+      type: object
+      required: [name, gender, version]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 50
+        gender:
+          $ref: '#/components/schemas/Gender'
+        phone:
+          type: string
+          pattern: '^1[3-9][0-9]{9}$'
+          nullable: true
+        email:
+          type: string
+          format: email
+          nullable: true
+        version:
+          type: integer
+          minimum: 1
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+          minLength: 6
+          maxLength: 128
+          writeOnly: true
+        newPassword:
+          type: string
+          minLength: 8
+          maxLength: 128
+          writeOnly: true
+    ChangeStatusRequest:
+      type: object
+      required: [status, version]
+      properties:
+        status:
+          $ref: '#/components/schemas/EnabledStatus'
+        version:
+          type: integer
+          minimum: 1
+    ResetPasswordRequest:
+      type: object
+      required: [version]
+      properties:
+        version:
+          type: integer
+          minimum: 1
+    ResetPasswordResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [temporaryPassword, expiresAt]
+              properties:
+                temporaryPassword:
+                  type: string
+                  writeOnly: true
+                expiresAt:
+                  type: string
+                  format: date-time
+    DepartmentNode:
+      type: object
+      required: [id, name, sortOrder, status, memberCount, createdAt, version, children]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        parentId:
+          allOf:
+            - $ref: '#/components/schemas/Id'
+          nullable: true
+        name:
+          type: string
+        leader:
+          allOf:
+            - $ref: '#/components/schemas/UserRef'
+          nullable: true
+        sortOrder:
+          type: integer
+          minimum: 0
+        status:
+          $ref: '#/components/schemas/EnabledStatus'
+        memberCount:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          minimum: 1
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/DepartmentNode'
+    DepartmentTreeResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/DepartmentNode'
+    DepartmentResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/DepartmentNode'
+    CreateDepartmentRequest:
+      type: object
+      required: [name, sortOrder, status]
+      properties:
+        parentId:
+          allOf:
+            - $ref: '#/components/schemas/Id'
+          nullable: true
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+        leaderId:
+          allOf:
+            - $ref: '#/components/schemas/Id'
+          nullable: true
+        sortOrder:
+          type: integer
+          minimum: 0
+          maximum: 9999
+        status:
+          $ref: '#/components/schemas/EnabledStatus'
+    UpdateDepartmentRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateDepartmentRequest'
+        - type: object
+          required: [version]
+          properties:
+            version:
+              type: integer
+              minimum: 1
+    Role:
+      type: object
+      required: [id, code, name, dataScope, status, memberCount, systemRole, createdAt, updatedAt, version]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        code:
+          type: string
+        name:
+          type: string
+        dataScope:
+          $ref: '#/components/schemas/DataScope'
+        customDepartmentIds:
+          type: array
+          items:
+            $ref: '#/components/schemas/Id'
+        status:
+          $ref: '#/components/schemas/EnabledStatus'
+        memberCount:
+          type: integer
+          minimum: 0
+        systemRole:
+          type: boolean
+        remark:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          minimum: 1
+    RoleResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/Role'
+    RolePage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+          minimum: 0
+    RoleListResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/RolePage'
+    CreateRoleRequest:
+      type: object
+      required: [code, name, dataScope, status]
+      properties:
+        code:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_]{2,49}$'
+        name:
+          type: string
+          minLength: 2
+          maxLength: 50
+        dataScope:
+          $ref: '#/components/schemas/DataScope'
+        customDepartmentIds:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Id'
+        status:
+          $ref: '#/components/schemas/EnabledStatus'
+        remark:
+          type: string
+          maxLength: 500
+          nullable: true
+    UpdateRoleRequest:
+      type: object
+      required: [name, dataScope, status, version]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 50
+        dataScope:
+          $ref: '#/components/schemas/DataScope'
+        customDepartmentIds:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Id'
+        status:
+          $ref: '#/components/schemas/EnabledStatus'
+        remark:
+          type: string
+          maxLength: 500
+          nullable: true
+        version:
+          type: integer
+          minimum: 1
+    RolePermission:
+      type: object
+      required: [roleId, permissionIds, dataScope, customDepartmentIds, version]
+      properties:
+        roleId:
+          $ref: '#/components/schemas/Id'
+        permissionIds:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Id'
+        dataScope:
+          $ref: '#/components/schemas/DataScope'
+        customDepartmentIds:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Id'
+        version:
+          type: integer
+          minimum: 1
+    RolePermissionResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/RolePermission'
+    ReplaceRolePermissionsRequest:
+      type: object
+      required: [permissionIds, dataScope, customDepartmentIds, version]
+      properties:
+        permissionIds:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Id'
+        dataScope:
+          $ref: '#/components/schemas/DataScope'
+        customDepartmentIds:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Id'
+        version:
+          type: integer
+          minimum: 1
+    MenuNode:
+      type: object
+      required: [id, name, type, sortOrder, status, visible, version, children]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        parentId:
+          allOf:
+            - $ref: '#/components/schemas/Id'
+          nullable: true
+        name:
+          type: string
+        icon:
+          type: string
+          nullable: true
+        type:
+          $ref: '#/components/schemas/MenuType'
+        routePath:
+          type: string
+          nullable: true
+        component:
+          type: string
+          nullable: true
+        permission:
+          type: string
+          nullable: true
+        sortOrder:
+          type: integer
+        status:
+          $ref: '#/components/schemas/EnabledStatus'
+        visible:
+          type: boolean
+        version:
+          type: integer
+          minimum: 1
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuNode'
+    MenuTreeResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/MenuNode'
+    MenuResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/MenuNode'
+    CreateMenuRequest:
+      type: object
+      required: [name, type, sortOrder, status, visible]
+      properties:
+        parentId:
+          allOf:
+            - $ref: '#/components/schemas/Id'
+          nullable: true
+        name:
+          type: string
+          minLength: 2
+          maxLength: 50
+        icon:
+          type: string
+          maxLength: 100
+          nullable: true
+        type:
+          $ref: '#/components/schemas/MenuType'
+        routePath:
+          type: string
+          maxLength: 200
+          nullable: true
+        component:
+          type: string
+          maxLength: 200
+          nullable: true
+        permission:
+          type: string
+          maxLength: 100
+          nullable: true
+        sortOrder:
+          type: integer
+          minimum: 0
+          maximum: 9999
+        status:
+          $ref: '#/components/schemas/EnabledStatus'
+        visible:
+          type: boolean
+    UpdateMenuRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateMenuRequest'
+        - type: object
+          required: [version]
+          properties:
+            version:
+              type: integer
+              minimum: 1
+    FileSummary:
+      type: object
+      required: [id, fileName, contentType, size, status, uploadedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        fileName:
+          type: string
+        contentType:
+          type: string
+        size:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 20971520
+        status:
+          $ref: '#/components/schemas/FileStatus'
+        uploadedAt:
+          type: string
+          format: date-time
+    FileResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/FileSummary'
+    SaveLeaveApplicationRequest:
+      type: object
+      properties:
+        leaveType:
+          allOf:
+            - $ref: '#/components/schemas/LeaveType'
+          nullable: true
+        startTime:
+          type: string
+          format: date-time
+          nullable: true
+        endTime:
+          type: string
+          format: date-time
+          nullable: true
+        urgency:
+          allOf:
+            - $ref: '#/components/schemas/Urgency'
+          nullable: true
+        reason:
+          type: string
+          maxLength: 500
+          nullable: true
+        handoverUserId:
+          allOf:
+            - $ref: '#/components/schemas/Id'
+          nullable: true
+        contactPhone:
+          type: string
+          pattern: '^1[3-9][0-9]{9}$'
+          nullable: true
+        attachmentIds:
+          type: array
+          maxItems: 5
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Id'
+    UpdateLeaveApplicationRequest:
+      allOf:
+        - $ref: '#/components/schemas/SaveLeaveApplicationRequest'
+        - type: object
+          required: [version]
+          properties:
+            version:
+              type: integer
+              minimum: 1
+    LeaveApplication:
+      type: object
+      required:
+        - id
+        - applicationNo
+        - applicant
+        - department
+        - attachments
+        - status
+        - submissionRound
+        - allowedActions
+        - createdAt
+        - updatedAt
+        - version
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        applicationNo:
+          type: string
+          pattern: '^LV[0-9]{12}$'
+        applicant:
+          $ref: '#/components/schemas/UserRef'
+        department:
+          $ref: '#/components/schemas/DepartmentRef'
+        leader:
+          allOf:
+            - $ref: '#/components/schemas/UserRef'
+          nullable: true
+        leaveType:
+          allOf:
+            - $ref: '#/components/schemas/LeaveType'
+          nullable: true
+        startTime:
+          type: string
+          format: date-time
+          nullable: true
+        endTime:
+          type: string
+          format: date-time
+          nullable: true
+        leaveDurationHours:
+          type: number
+          format: double
+          minimum: 0.5
+          maximum: 720
+          multipleOf: 0.1
+          nullable: true
+        urgency:
+          allOf:
+            - $ref: '#/components/schemas/Urgency'
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+        handoverUser:
+          allOf:
+            - $ref: '#/components/schemas/UserRef'
+          nullable: true
+        contactPhone:
+          type: string
+          nullable: true
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/FileSummary'
+        status:
+          $ref: '#/components/schemas/LeaveStatus'
+        submissionRound:
+          type: integer
+          minimum: 0
+        currentNode:
+          type: string
+          nullable: true
+        currentApprover:
+          allOf:
+            - $ref: '#/components/schemas/UserRef'
+          nullable: true
+        allowedActions:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: [EDIT, SUBMIT, WITHDRAW, DELETE, APPROVE, REJECT, TRANSFER]
+        createdAt:
+          type: string
+          format: date-time
+        submittedAt:
+          type: string
+          format: date-time
+          nullable: true
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          minimum: 1
+    LeaveApplicationResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/LeaveApplication'
+    LeaveApplicationPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LeaveApplication'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+          minimum: 0
+    LeaveApplicationListResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/LeaveApplicationPage'
+    LeaveSubmissionResult:
+      type: object
+      required: [applicationId, applicationNo, status, submissionRound, version]
+      properties:
+        applicationId:
+          $ref: '#/components/schemas/Id'
+        applicationNo:
+          type: string
+        status:
+          $ref: '#/components/schemas/LeaveStatus'
+        submissionRound:
+          type: integer
+          minimum: 0
+        currentNode:
+          type: string
+          nullable: true
+        currentApprover:
+          allOf:
+            - $ref: '#/components/schemas/UserRef'
+          nullable: true
+        version:
+          type: integer
+          minimum: 1
+    LeaveSubmissionResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/LeaveSubmissionResult'
+    WithdrawLeaveRequest:
+      type: object
+      required: [version, reason]
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        reason:
+          type: string
+          minLength: 2
+          maxLength: 200
+    ApprovalRecord:
+      type: object
+      required: [id, applicationId, submissionRound, action, operator, toStatus, operatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        applicationId:
+          $ref: '#/components/schemas/Id'
+        submissionRound:
+          type: integer
+          minimum: 0
+        action:
+          $ref: '#/components/schemas/ApprovalAction'
+        operator:
+          $ref: '#/components/schemas/UserRef'
+        fromStatus:
+          type: string
+          nullable: true
+        toStatus:
+          type: string
+        comment:
+          type: string
+          nullable: true
+        targetUser:
+          allOf:
+            - $ref: '#/components/schemas/UserRef'
+          nullable: true
+        operatedAt:
+          type: string
+          format: date-time
+    ApprovalRound:
+      type: object
+      required: [submissionRound, records]
+      properties:
+        submissionRound:
+          type: integer
+          minimum: 0
+        submittedAt:
+          type: string
+          format: date-time
+          nullable: true
+        result:
+          type: string
+          nullable: true
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApprovalRecord'
+    ApprovalTimelineResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ApprovalRound'
+    ApprovalTask:
+      type: object
+      required:
+        - id
+        - applicationId
+        - applicationNo
+        - applicant
+        - department
+        - leaveType
+        - startTime
+        - endTime
+        - leaveDurationHours
+        - urgency
+        - status
+        - assignee
+        - createdAt
+        - version
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        applicationId:
+          $ref: '#/components/schemas/Id'
+        applicationNo:
+          type: string
+        applicant:
+          $ref: '#/components/schemas/UserRef'
+        department:
+          $ref: '#/components/schemas/DepartmentRef'
+        leaveType:
+          $ref: '#/components/schemas/LeaveType'
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        leaveDurationHours:
+          type: number
+          format: double
+        urgency:
+          $ref: '#/components/schemas/Urgency'
+        status:
+          $ref: '#/components/schemas/ApprovalTaskStatus'
+        assignee:
+          $ref: '#/components/schemas/UserRef'
+        comment:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        processedAt:
+          type: string
+          format: date-time
+          nullable: true
+        version:
+          type: integer
+          minimum: 1
+    ApprovalTaskPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApprovalTask'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+          minimum: 0
+    ApprovalTaskListResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/ApprovalTaskPage'
+    ApprovalTaskDetail:
+      type: object
+      required: [task, application, timeline]
+      properties:
+        task:
+          $ref: '#/components/schemas/ApprovalTask'
+        application:
+          $ref: '#/components/schemas/LeaveApplication'
+        timeline:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApprovalRound'
+    ApprovalTaskResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/ApprovalTaskDetail'
+    ApproveTaskRequest:
+      type: object
+      required: [version]
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        comment:
+          type: string
+          maxLength: 500
+          nullable: true
+    RejectTaskRequest:
+      type: object
+      required: [version, comment]
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        comment:
+          type: string
+          minLength: 5
+          maxLength: 500
+    TransferTaskRequest:
+      type: object
+      required: [version, targetUserId, reason]
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        targetUserId:
+          allOf:
+            - $ref: '#/components/schemas/Id'
+          description: 申请人所在部门内、已启用且拥有审批任务权限的用户
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 200
+    ApprovalActionResult:
+      type: object
+      required: [taskId, taskStatus, applicationId, applicationStatus, processedAt]
+      properties:
+        taskId:
+          $ref: '#/components/schemas/Id'
+        taskStatus:
+          $ref: '#/components/schemas/ApprovalTaskStatus'
+        newTaskId:
+          allOf:
+            - $ref: '#/components/schemas/Id'
+          nullable: true
+          description: 转交成功时返回
+        applicationId:
+          $ref: '#/components/schemas/Id'
+        applicationStatus:
+          $ref: '#/components/schemas/LeaveStatus'
+        processedAt:
+          type: string
+          format: date-time
+    ApprovalActionResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/ApprovalActionResult'
+    SaveNoticeRequest:
+      type: object
+      required: [title, summary, content, type, scopeType, targetDepartmentIds, isPinned, attachmentIds]
+      properties:
+        title:
+          type: string
+          minLength: 2
+          maxLength: 100
+        summary:
+          type: string
+          minLength: 2
+          maxLength: 300
+        content:
+          type: string
+          minLength: 1
+          maxLength: 20000
+        type:
+          $ref: '#/components/schemas/NoticeType'
+        scopeType:
+          $ref: '#/components/schemas/NoticeScopeType'
+        targetDepartmentIds:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Id'
+        isPinned:
+          type: boolean
+        scheduledPublishAt:
+          type: string
+          format: date-time
+          nullable: true
+        attachmentIds:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Id'
+    UpdateNoticeRequest:
+      allOf:
+        - $ref: '#/components/schemas/SaveNoticeRequest'
+        - type: object
+          required: [version]
+          properties:
+            version:
+              type: integer
+              minimum: 1
+    Notice:
+      type: object
+      required:
+        - id
+        - title
+        - summary
+        - content
+        - type
+        - scopeType
+        - targetDepartmentIds
+        - publisher
+        - publisherDepartment
+        - isPinned
+        - status
+        - readCount
+        - isRead
+        - attachments
+        - createdAt
+        - updatedAt
+        - version
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        title:
+          type: string
+        summary:
+          type: string
+        content:
+          type: string
+        type:
+          $ref: '#/components/schemas/NoticeType'
+        scopeType:
+          $ref: '#/components/schemas/NoticeScopeType'
+        targetDepartmentIds:
+          type: array
+          items:
+            $ref: '#/components/schemas/Id'
+        publisher:
+          $ref: '#/components/schemas/UserRef'
+        publisherDepartment:
+          $ref: '#/components/schemas/DepartmentRef'
+        isPinned:
+          type: boolean
+        status:
+          $ref: '#/components/schemas/NoticeStatus'
+        readCount:
+          type: integer
+          minimum: 0
+        isRead:
+          type: boolean
+        scheduledPublishAt:
+          type: string
+          format: date-time
+          nullable: true
+        publishedAt:
+          type: string
+          format: date-time
+          nullable: true
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/FileSummary'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          minimum: 1
+    NoticeResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/Notice'
+    NoticePage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notice'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+          minimum: 0
+    NoticeListResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/NoticePage'
+    NoticeWithdrawRequest:
+      type: object
+      required: [version, reason]
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        reason:
+          type: string
+          minLength: 2
+          maxLength: 200
+    ChangePinRequest:
+      type: object
+      required: [isPinned, version]
+      properties:
+        isPinned:
+          type: boolean
+        version:
+          type: integer
+          minimum: 1
+    Notification:
+      type: object
+      required: [id, type, title, summary, businessType, businessId, link, isRead, createdAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        type:
+          $ref: '#/components/schemas/NotificationType'
+        title:
+          type: string
+        summary:
+          type: string
+        businessType:
+          type: string
+        businessId:
+          $ref: '#/components/schemas/Id'
+        link:
+          type: string
+          pattern: '^/'
+        isRead:
+          type: boolean
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+    NotificationPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+          minimum: 0
+    NotificationListResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/NotificationPage'
+    CountResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [count]
+              properties:
+                count:
+                  type: integer
+                  minimum: 0
+    WorkbenchMetric:
+      type: object
+      required: [key, label, value, trendDirection, targetPath]
+      properties:
+        key:
+          type: string
+          enum: [PENDING_APPROVALS, MY_APPLICATIONS, UNREAD_NOTICES, MONTHLY_LEAVE_HOURS]
+        label:
+          type: string
+        value:
+          type: number
+        trendValue:
+          type: number
+          nullable: true
+        trendDirection:
+          type: string
+          enum: [UP, DOWN, FLAT, UNKNOWN]
+        targetPath:
+          type: string
+    WorkbenchTodo:
+      type: object
+      required: [id, type, title, urgency, createdAt, targetPath]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        type:
+          type: string
+        title:
+          type: string
+        urgency:
+          $ref: '#/components/schemas/Urgency'
+        dueAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        targetPath:
+          type: string
+    ChartPoint:
+      type: object
+      required: [key, label, value]
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        value:
+          type: number
+    WorkbenchData:
+      type: object
+      required:
+        - metrics
+        - todos
+        - quickEntries
+        - recentApplications
+        - recentNotices
+        - approvalTrend
+        - leaveTypeDistribution
+        - applicationStatusDistribution
+      properties:
+        metrics:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkbenchMetric'
+        todos:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/WorkbenchTodo'
+        quickEntries:
+          type: array
+          items:
+            type: object
+            required: [key, label, targetPath]
+            properties:
+              key:
+                type: string
+              label:
+                type: string
+              targetPath:
+                type: string
+        recentApplications:
+          type: array
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/LeaveApplication'
+        recentNotices:
+          type: array
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/Notice'
+        approvalTrend:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChartPoint'
+        leaveTypeDistribution:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChartPoint'
+        applicationStatusDistribution:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChartPoint'
+    WorkbenchResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/WorkbenchData'
+    OperationLog:
+      type: object
+      required:
+        - id
+        - module
+        - operationType
+        - operator
+        - requestMethod
+        - requestPath
+        - ipAddress
+        - result
+        - durationMs
+        - operatedAt
+        - requestId
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        module:
+          type: string
+        operationType:
+          type: string
+        operator:
+          $ref: '#/components/schemas/UserRef'
+        requestMethod:
+          type: string
+        requestPath:
+          type: string
+        ipAddress:
+          type: string
+        result:
+          $ref: '#/components/schemas/OperationResult'
+        businessType:
+          type: string
+          nullable: true
+        businessId:
+          type: string
+          nullable: true
+        summary:
+          type: string
+          nullable: true
+        errorCode:
+          type: string
+          nullable: true
+        durationMs:
+          type: integer
+          format: int64
+          minimum: 0
+        operatedAt:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    OperationLogPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationLog'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+          minimum: 0
+    OperationLogListResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/OperationLogPage'
+    OperationLogResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/OperationLog'
