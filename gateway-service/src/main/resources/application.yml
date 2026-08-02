@@ -4,6 +4,10 @@ server:
 spring:
   application:
     name: gateway-service
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
   cloud:
     gateway:
       server:
@@ -25,6 +29,14 @@ spring:
               uri: ${AUDIT_SERVICE_URL:http://audit-service:8080}
               predicates:
                 - Path=/api/v1/operation-logs/**
+
+redblack:
+  security:
+    issuer: ${JWT_ISSUER:https://identity.redblack.local}
+    audience: ${JWT_AUDIENCE:redblack-oa}
+    public-key-path: ${JWT_PUBLIC_KEY_PATH:}
+    internal-secret: ${INTERNAL_SERVICE_TOKEN_SECRET:}
+    identity-internal-url: ${IDENTITY_SERVICE_URL:http://identity-service:8080}
 
 management:
   endpoints:

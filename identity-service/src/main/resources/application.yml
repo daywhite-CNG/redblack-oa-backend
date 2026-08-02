@@ -5,7 +5,7 @@ spring:
   application:
     name: identity-service
   datasource:
-    url: ${IDENTITY_DB_URL:jdbc:mysql://mysql:3306/redblack_identity?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    url: ${IDENTITY_DB_URL:jdbc:mysql://mysql:3306/redblack_identity?useUnicode=true&characterEncoding=utf8&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true}
     username: ${IDENTITY_DB_USERNAME}
     password: ${IDENTITY_DB_PASSWORD}
   flyway:
@@ -16,10 +16,37 @@ spring:
       port: ${REDIS_PORT:6379}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+
+redblack:
+  security:
+    issuer: ${JWT_ISSUER:https://identity.redblack.local}
+    audience: ${JWT_AUDIENCE:redblack-oa}
+    private-key-path: ${JWT_PRIVATE_KEY_PATH:}
+    public-key-path: ${JWT_PUBLIC_KEY_PATH:}
+    internal-secret: ${INTERNAL_SERVICE_TOKEN_SECRET:}
+    access-token-ttl: 8h
+    authorization-cache-ttl: 5m
+    allowed-service-names: ${INTERNAL_ALLOWED_SERVICES:gateway-service,approval-service,office-service,audit-service}
+  outbox:
+    topic: redblack.identity.events.v1
+    audit-topic: redblack.audit.events.v1
+    fixed-delay: ${OUTBOX_FIXED_DELAY:3000}
 
 mybatis-plus:
+  global-config:
+    banner: false
   configuration:
     map-underscore-to-camel-case: true
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: false
 
 management:
   endpoints:
