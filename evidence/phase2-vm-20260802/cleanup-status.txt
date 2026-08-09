@@ -1,0 +1,19 @@
+2026-08-02T03:58:25+00:00
+collector_removed=yes
+upload_archive_removed=yes
+proxy_listener
+none
+docker_concurrency
+2:  "max-concurrent-downloads": 1
+docker_proxy_dropin
+/etc/systemd/system/docker.service.d/10-proxy.conf
+sudo_noninteractive
+unavailable
+all_containers
+CONTAINER ID   IMAGE                          COMMAND                  CREATED          STATUS                    PORTS                                 NAMES
+55f2b309a6d5   redblack-oa-identity-service   "java -jar /app/appl…"   10 minutes ago   Up 10 minutes (healthy)                                         redblack-oa-identity-service-1
+987f2e44eafc   nginx:1.27-alpine              "/docker-entrypoint.…"   13 hours ago     Up 56 minutes (healthy)   0.0.0.0:80->80/tcp, [::]:80->80/tcp   redblack-oa-nginx-1
+2d5764e6894d   apache/kafka-native:3.9.1      "/etc/kafka/docker/r…"   13 hours ago     Up 8 minutes (healthy)    9092/tcp                              redblack-oa-kafka-1
+a03cbd52889c   redblack-oa-gateway-service    "java -jar /app/appl…"   13 hours ago     Up 56 minutes (healthy)                                         redblack-oa-gateway-service-1
+bc24e388a9ad   redis:7.4-alpine               "docker-entrypoint.s…"   13 hours ago     Up 56 minutes (healthy)   6379/tcp                              redblack-oa-redis-1
+804a0fa2d2ce   mysql:8.4                      "docker-entrypoint.s…"   13 hours ago     Up 56 minutes (healthy)   3306/tcp, 33060/tcp                   redblack-oa-mysql-1

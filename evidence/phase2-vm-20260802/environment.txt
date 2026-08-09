@@ -1,0 +1,25 @@
+2026-08-02T03:48:48+00:00
+oa-server
+Linux 6.8.0-136-generic x86_64 GNU/Linux
+Filesystem                         Size  Used Avail Use% Mounted on
+/dev/mapper/ubuntu--vg-ubuntu--lv   19G   11G  7.3G  59% /
+               total        used        free      shared  buff/cache   available
+Mem:           7.7Gi       1.8Gi       4.7Gi       2.1Mi       1.5Gi       5.9Gi
+Swap:          3.8Gi          0B       3.8Gi
+Server=29.1.3
+Docker Compose version 2.40.3+ds1-0ubuntu1~24.04.1
+66e5d8e74af6828e76df519b297b34c582d2015f3ba71c34083c462d60ac8c43  identity-service/target/identity-service-1.0.0-SNAPSHOT.jar
+324e2fd5ac888505fea3783d1e9172a1cd9f89be7c61466aa7700dad27dbb7e9  deploy/KafkaRoundTripProbe.java
+7ec82a38b07eff4a4f6a0b6b5e8dba5fcd7bc5ed5413ef21af9374b1a5668df4  deploy/KafkaRoundTripProbe.jar
+5219e63ed901202efcecd979a5eeddd0ad72cc83b7c8e71aace782ae48ec5edb  deploy/verify-phase2.sh
+e7e72e527ca5e45cac2a5b1b57dfa4b1d433694fda3c1458a8e392ac5463d36e  deploy/verify-identity-api.py
+f699f2ceb42a72ba92c699e48872eea1136f02de0c79957f388eeecd3e8b814c  deploy/verify-phase2-resilience.sh
+7b3d574195f68f046ccbdf402f1915528d1bc28ead6dc1743c482bc6a7f7f18a  deploy/Dockerfile
+95c40f293da6cf1d998fff5f4350610ed98d8da483425100b81d27b1a45cbd4e  deploy/docker-compose.yml
+NAME                             IMAGE                          COMMAND                  SERVICE            CREATED          STATUS                    PORTS
+redblack-oa-gateway-service-1    redblack-oa-gateway-service    "java -jar /app/appl…"   gateway-service    13 hours ago     Up 47 minutes (healthy)
+redblack-oa-identity-service-1   redblack-oa-identity-service   "java -jar /app/appl…"   identity-service   58 seconds ago   Up 58 seconds (healthy)
+redblack-oa-kafka-1              apache/kafka-native:3.9.1      "/etc/kafka/docker/r…"   kafka              13 hours ago     Up 47 minutes (healthy)   9092/tcp
+redblack-oa-mysql-1              mysql:8.4                      "docker-entrypoint.s…"   mysql              13 hours ago     Up 47 minutes (healthy)   3306/tcp, 33060/tcp
+redblack-oa-nginx-1              nginx:1.27-alpine              "/docker-entrypoint.…"   nginx              13 hours ago     Up 47 minutes (healthy)   0.0.0.0:80->80/tcp, [::]:80->80/tcp
+redblack-oa-redis-1              redis:7.4-alpine               "docker-entrypoint.s…"   redis              13 hours ago     Up 47 minutes (healthy)   6379/tcp

@@ -1,0 +1,163 @@
+name: redblack-oa
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      TZ: UTC
+      MYSQL_DATABASE: redblack_identity
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+00:00
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    mem_limit: 768m
+    networks: [backend]
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 192m
+    networks: [backend]
+
+  kafka:
+    image: apache/kafka-native:3.9.1
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "nc", "-z", "-w", "3", "127.0.0.1", "9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    mem_limit: 768m
+    networks: [backend]
+
+  identity-service:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        JAR_FILE: identity-service/target/identity-service-1.0.0-SNAPSHOT.jar
+    restart: unless-stopped
+    environment:
+      TZ: UTC
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70 -Duser.timezone=UTC
+      IDENTITY_DB_URL: jdbc:mysql://mysql:3306/redblack_identity?useUnicode=true&characterEncoding=utf8&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+      IDENTITY_DB_USERNAME: ${MYSQL_USER}
+      IDENTITY_DB_PASSWORD: ${MYSQL_PASSWORD}
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JWT_ISSUER: ${JWT_ISSUER}
+      JWT_AUDIENCE: redblack-oa
+      JWT_PRIVATE_KEY_PATH: /run/redblack/jwt-private.pem
+      JWT_PUBLIC_KEY_PATH: /run/redblack/jwt-public.pem
+      INTERNAL_SERVICE_TOKEN_SECRET: ${INTERNAL_SERVICE_TOKEN_SECRET}
+    volumes:
+      - ./secrets/jwt-private.pem:/run/redblack/jwt-private.pem:ro
+      - ./secrets/jwt-public.pem:/run/redblack/jwt-public.pem:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    mem_limit: 640m
+    networks: [backend]
+
+  gateway-service:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        JAR_FILE: gateway-service/target/gateway-service-1.0.0-SNAPSHOT.jar
+    restart: unless-stopped
+    environment:
+      TZ: UTC
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70 -Duser.timezone=UTC
+      REDIS_HOST: redis
+      IDENTITY_SERVICE_URL: http://identity-service:8080
+      JWT_ISSUER: ${JWT_ISSUER}
+      JWT_AUDIENCE: redblack-oa
+      JWT_PUBLIC_KEY_PATH: /run/redblack/jwt-public.pem
+      INTERNAL_SERVICE_TOKEN_SECRET: ${INTERNAL_SERVICE_TOKEN_SECRET}
+    volumes:
+      - ./secrets/jwt-public.pem:/run/redblack/jwt-public.pem:ro
+    depends_on:
+      identity-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    mem_limit: 512m
+    networks: [backend]
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      gateway-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    mem_limit: 64m
+    networks: [backend]
+
+volumes:
+  mysql-data:
+  redis-data:
+  kafka-data:
+
+networks:
+  backend:
+    driver: bridge

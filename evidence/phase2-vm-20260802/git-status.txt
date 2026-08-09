@@ -1,0 +1,55 @@
+﻿ M .gitignore
+ M README.md
+ M gateway-service/pom.xml
+ M gateway-service/src/main/java/com/redblack/gateway/config/GatewaySecurityConfiguration.java
+ M gateway-service/src/main/resources/application.yml
+ M identity-service/pom.xml
+ M identity-service/src/main/java/com/redblack/identity/IdentityServiceApplication.java
+ M identity-service/src/main/java/com/redblack/identity/infrastructure/security/IdentitySecurityConfiguration.java
+ M identity-service/src/main/resources/application.yml
+ M pom.xml
+?? .gitattributes
+?? deploy/
+?? evidence/
+?? gateway-service/src/main/java/com/redblack/gateway/config/GatewayPemKeyReader.java
+?? gateway-service/src/main/java/com/redblack/gateway/config/GatewaySecurityProperties.java
+?? gateway-service/src/main/java/com/redblack/gateway/security/
+?? gateway-service/src/test/
+?? identity-service/src/main/java/com/redblack/identity/api/AuthController.java
+?? identity-service/src/main/java/com/redblack/identity/api/DepartmentController.java
+?? identity-service/src/main/java/com/redblack/identity/api/IdentityApiModels.java
+?? identity-service/src/main/java/com/redblack/identity/api/IdentityExceptionHandler.java
+?? identity-service/src/main/java/com/redblack/identity/api/InternalIdentityController.java
+?? identity-service/src/main/java/com/redblack/identity/api/MenuController.java
+?? identity-service/src/main/java/com/redblack/identity/api/RequestIdFilter.java
+?? identity-service/src/main/java/com/redblack/identity/api/RequestIds.java
+?? identity-service/src/main/java/com/redblack/identity/api/RoleController.java
+?? identity-service/src/main/java/com/redblack/identity/api/UserController.java
+?? identity-service/src/main/java/com/redblack/identity/application/AuthApplicationService.java
+?? identity-service/src/main/java/com/redblack/identity/application/AuthorizationSnapshotService.java
+?? identity-service/src/main/java/com/redblack/identity/application/BusinessException.java
+?? identity-service/src/main/java/com/redblack/identity/application/DepartmentApplicationService.java
+?? identity-service/src/main/java/com/redblack/identity/application/IdempotencyService.java
+?? identity-service/src/main/java/com/redblack/identity/application/IdentityViewAssembler.java
+?? identity-service/src/main/java/com/redblack/identity/application/InternalIdentityApplicationService.java
+?? identity-service/src/main/java/com/redblack/identity/application/MenuApplicationService.java
+?? identity-service/src/main/java/com/redblack/identity/application/OutboxBackoffPolicy.java
+?? identity-service/src/main/java/com/redblack/identity/application/OutboxPublisher.java
+?? identity-service/src/main/java/com/redblack/identity/application/OutboxService.java
+?? identity-service/src/main/java/com/redblack/identity/application/RoleApplicationService.java
+?? identity-service/src/main/java/com/redblack/identity/application/UserApplicationService.java
+?? identity-service/src/main/java/com/redblack/identity/domain/DepartmentEntity.java
+?? identity-service/src/main/java/com/redblack/identity/domain/IdentityEnums.java
+?? identity-service/src/main/java/com/redblack/identity/domain/MenuEntity.java
+?? identity-service/src/main/java/com/redblack/identity/domain/OutboxEventEntity.java
+?? identity-service/src/main/java/com/redblack/identity/domain/PermissionEntity.java
+?? identity-service/src/main/java/com/redblack/identity/domain/RoleEntity.java
+?? identity-service/src/main/java/com/redblack/identity/domain/UserEntity.java
+?? identity-service/src/main/java/com/redblack/identity/infrastructure/persistence/
+?? identity-service/src/main/java/com/redblack/identity/infrastructure/security/JwtTokenService.java
+?? identity-service/src/main/java/com/redblack/identity/infrastructure/security/PemKeyReader.java
+?? identity-service/src/main/java/com/redblack/identity/infrastructure/security/SecurityProperties.java
+?? identity-service/src/main/resources/db/migration/V1__create_identity_schema.sql
+?? identity-service/src/main/resources/db/migration/V2__seed_identity_baseline.sql
+?? identity-service/src/main/resources/db/migration/V3__create_identity_idempotency.sql
+?? identity-service/src/test/

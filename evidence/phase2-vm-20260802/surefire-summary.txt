@@ -1,0 +1,1 @@
+CapturedAt=2026-08-02T11:57:24.2126744+08:00 JDK=21.0.9 Modules=7 Suites=13 Tests=19 Passed=17 Failures=0 Errors=0 Skipped=2

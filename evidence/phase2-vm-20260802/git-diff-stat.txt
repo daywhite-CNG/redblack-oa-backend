@@ -1,0 +1,11 @@
+﻿ .gitignore                                         |   1 +
+ README.md                                          |  22 +++-
+ gateway-service/pom.xml                            |   8 ++
+ .../config/GatewaySecurityConfiguration.java       |  64 +++++++++-
+ gateway-service/src/main/resources/application.yml |  12 ++
+ identity-service/pom.xml                           |  37 ++++++
+ .../identity/IdentityServiceApplication.java       |   4 +
+ .../security/IdentitySecurityConfiguration.java    | 130 ++++++++++++++++++++-
+ .../src/main/resources/application.yml             |  29 ++++-
+ pom.xml                                            |  12 ++
+ 10 files changed, 308 insertions(+), 11 deletions(-)
