@@ -3,10 +3,12 @@ package com.redblack.gateway.security;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.redblack.common.api.ApiResponse;
 import com.redblack.gateway.config.GatewaySecurityProperties;
+import io.netty.channel.ChannelOption;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -14,6 +16,9 @@ import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
+import reactor.netty.http.client.HttpClient;
+
+import java.time.Duration;
 
 public class GatewayAuthorizationWebFilter implements WebFilter {
     private static final String AUTHORIZATION_KEY = "redblack:identity:authorization:";
@@ -23,6 +28,7 @@ public class GatewayAuthorizationWebFilter implements WebFilter {
     private final ObjectMapper objectMapper;
     private final WebClient identityClient;
     private final ServiceTokenIssuer serviceTokens;
+    private final Duration identityResponseTimeout;
 
     public GatewayAuthorizationWebFilter(ReactiveStringRedisTemplate redis,
                                          ObjectMapper objectMapper,
@@ -31,8 +37,16 @@ public class GatewayAuthorizationWebFilter implements WebFilter {
                                          ServiceTokenIssuer serviceTokens) {
         this.redis = redis;
         this.objectMapper = objectMapper;
-        this.identityClient = webClientBuilder.baseUrl(properties.getIdentityInternalUrl()).build();
+        HttpClient httpClient = HttpClient.create()
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS,
+                        Math.toIntExact(properties.getIdentityConnectTimeout().toMillis()))
+                .responseTimeout(properties.getIdentityResponseTimeout());
+        this.identityClient = webClientBuilder.clone()
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
+                .baseUrl(properties.getIdentityInternalUrl())
+                .build();
         this.serviceTokens = serviceTokens;
+        this.identityResponseTimeout = properties.getIdentityResponseTimeout();
     }
 
     @Override
@@ -86,7 +100,8 @@ public class GatewayAuthorizationWebFilter implements WebFilter {
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<ApiResponse<AuthorizationSnapshot>>() {
                 })
-                .map(ApiResponse::data);
+                .map(ApiResponse::data)
+                .timeout(identityResponseTimeout);
     }
 
     private Mono<Void> validateSnapshot(ServerWebExchange exchange,

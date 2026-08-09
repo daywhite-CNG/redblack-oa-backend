@@ -28,6 +28,8 @@ redblack:
     public-key-path: ${JWT_PUBLIC_KEY_PATH:}
     internal-secret: ${INTERNAL_SERVICE_TOKEN_SECRET:}
     identity-internal-url: ${IDENTITY_SERVICE_URL:http://identity-service:8080}
+    identity-connect-timeout: ${IDENTITY_CONNECT_TIMEOUT:1s}
+    identity-response-timeout: ${IDENTITY_RESPONSE_TIMEOUT:3s}
   outbox:
     topic: redblack.approval.events.v1
     audit-topic: redblack.audit.events.v1

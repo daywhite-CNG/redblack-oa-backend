@@ -7,10 +7,12 @@ import com.redblack.common.trace.TraceHeaders;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
+import java.net.http.HttpClient;
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -20,7 +22,15 @@ public class IdentityClient {
     private final ApprovalServiceTokenIssuer tokenIssuer;
 
     public IdentityClient(ApprovalSecurityProperties properties, ApprovalServiceTokenIssuer tokenIssuer) {
-        this.restClient = RestClient.builder().baseUrl(properties.getIdentityInternalUrl()).build();
+        HttpClient httpClient = HttpClient.newBuilder()
+                .connectTimeout(properties.getIdentityConnectTimeout())
+                .build();
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+        requestFactory.setReadTimeout(properties.getIdentityResponseTimeout());
+        this.restClient = RestClient.builder()
+                .baseUrl(properties.getIdentityInternalUrl())
+                .requestFactory(requestFactory)
+                .build();
         this.tokenIssuer = tokenIssuer;
     }
 

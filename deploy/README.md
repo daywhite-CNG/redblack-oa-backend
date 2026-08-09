@@ -56,6 +56,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yml ps
 python3 ./deploy/verify-identity-api.py http://127.0.0.1/api/v1
 ./deploy/verify-phase2-resilience.sh
 python3 ./deploy/verify-phase3-api.py http://127.0.0.1/api/v1
+python3 ./deploy/verify-phase3-fix.py http://127.0.0.1/api/v1
 ./deploy/verify-phase3-infrastructure.sh
 ./deploy/verify-phase3-resilience.sh
 ```
@@ -63,6 +64,7 @@ python3 ./deploy/verify-phase3-api.py http://127.0.0.1/api/v1
 脚本会依次检查六个容器、Flyway 与演示数据、Redis 往返、Kafka `acks=all` 写入及唯一消费组读取，以及经 Nginx 和网关完成登录、鉴权、员工越权拒绝和退出令牌失效。
 Python 验收会真实调用身份服务归属的 35 个公开操作，并覆盖部门领导 SQL 范围、普通员工越权、用户与部门写操作对象隐藏、幂等缓存命中前重新鉴权和资源清理。
 韧性验收会清空 Redis 并验证权限快照从 MySQL 回建；随后临时停止 Kafka，确认登录事实与 Outbox 保持成功，待 Kafka 恢复后事件变为 `SENT` 且可被真实消费。
+第三阶段修复验收会短暂暂停并自动恢复 `identity-service`，验证依赖响应超时返回标准 `503`、三个参数绑定异常返回 `400`，以及两个并发审批请求得到一个成功和一个 `409`。
 
 若验收失败，先查看：
 

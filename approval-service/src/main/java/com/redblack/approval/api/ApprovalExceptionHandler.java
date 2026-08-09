@@ -12,9 +12,12 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -38,6 +41,12 @@ public class ApprovalExceptionHandler {
 
     @ExceptionHandler({ConstraintViolationException.class, HttpMessageNotReadableException.class})
     ResponseEntity<ErrorResponse> invalidRequest(Exception exception, HttpServletRequest request) {
+        return response(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "请求参数校验失败", List.of(), request);
+    }
+
+    @ExceptionHandler({MissingRequestHeaderException.class, MissingServletRequestParameterException.class,
+            MethodArgumentTypeMismatchException.class})
+    ResponseEntity<ErrorResponse> invalidBinding(Exception exception, HttpServletRequest request) {
         return response(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "请求参数校验失败", List.of(), request);
     }
 
