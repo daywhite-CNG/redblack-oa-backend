@@ -5,7 +5,7 @@ spring:
   application:
     name: approval-service
   datasource:
-    url: ${APPROVAL_DB_URL:jdbc:mysql://mysql:3306/redblack_approval?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    url: ${APPROVAL_DB_URL:jdbc:mysql://mysql:3306/redblack_approval?useUnicode=true&characterEncoding=utf8&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true}
     username: ${APPROVAL_DB_USERNAME}
     password: ${APPROVAL_DB_PASSWORD}
   flyway:
@@ -16,10 +16,34 @@ spring:
       port: ${REDIS_PORT:6379}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+
+redblack:
+  security:
+    issuer: ${JWT_ISSUER:https://identity.redblack.local}
+    audience: ${JWT_AUDIENCE:redblack-oa}
+    public-key-path: ${JWT_PUBLIC_KEY_PATH:}
+    internal-secret: ${INTERNAL_SERVICE_TOKEN_SECRET:}
+    identity-internal-url: ${IDENTITY_SERVICE_URL:http://identity-service:8080}
+  outbox:
+    topic: redblack.approval.events.v1
+    audit-topic: redblack.audit.events.v1
+    fixed-delay: ${OUTBOX_FIXED_DELAY:3000}
 
 mybatis-plus:
+  global-config:
+    banner: false
   configuration:
     map-underscore-to-camel-case: true
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: false
 
 management:
   endpoints:

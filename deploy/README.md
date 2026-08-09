@@ -1,4 +1,4 @@
-# 虚拟机部署与第二阶段验收
+# 虚拟机部署与阶段验收
 
 目标环境为 Ubuntu 虚拟机 `192.168.12.131`。MySQL、Redis 和 Kafka 仅加入 Compose 内部网络，只有 Nginx 的 `80` 端口对宿主机开放。
 
@@ -39,12 +39,25 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yml ps
 
 不要把 `deploy/.env` 或 `deploy/secrets/` 提交到 Git。
 
+### 在既有 MySQL 卷上增加审批库
+
+第三阶段升级既有部署时，在启动 `approval-service` 前执行一次：
+
+```bash
+./deploy/prepare-approval-database.sh
+```
+
+脚本创建独立的 `redblack_approval` 数据库和服务账号；若 `.env` 尚未配置审批库密码，脚本会生成随机密码并保持文件权限为 `600`。全新 MySQL 卷会自动执行 `deploy/mysql-init/01-create-service-databases.sh`。
+
 ## 验收
 
 ```bash
 ./deploy/verify-phase2.sh
 python3 ./deploy/verify-identity-api.py http://127.0.0.1/api/v1
 ./deploy/verify-phase2-resilience.sh
+python3 ./deploy/verify-phase3-api.py http://127.0.0.1/api/v1
+./deploy/verify-phase3-infrastructure.sh
+./deploy/verify-phase3-resilience.sh
 ```
 
 脚本会依次检查六个容器、Flyway 与演示数据、Redis 往返、Kafka `acks=all` 写入及唯一消费组读取，以及经 Nginx 和网关完成登录、鉴权、员工越权拒绝和退出令牌失效。

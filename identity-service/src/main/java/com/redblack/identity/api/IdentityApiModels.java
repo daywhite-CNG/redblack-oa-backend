@@ -294,7 +294,9 @@ public final class IdentityApiModels {
             String userId,
             String name,
             String departmentId,
+            String departmentName,
             String leaderId,
+            String leaderName,
             EnabledStatus status
     ) {
     }
