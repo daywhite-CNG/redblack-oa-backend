@@ -12,6 +12,10 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       APPROVAL_DB_USERNAME: ${APPROVAL_DB_USERNAME}
       APPROVAL_DB_PASSWORD: ${APPROVAL_DB_PASSWORD}
+      OFFICE_DB_USERNAME: ${OFFICE_DB_USERNAME}
+      OFFICE_DB_PASSWORD: ${OFFICE_DB_PASSWORD}
+      AUDIT_DB_USERNAME: ${AUDIT_DB_USERNAME}
+      AUDIT_DB_PASSWORD: ${AUDIT_DB_PASSWORD}
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_0900_ai_ci
@@ -124,6 +128,7 @@ services:
       REDIS_HOST: redis
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       IDENTITY_SERVICE_URL: http://identity-service:8080
+      OFFICE_SERVICE_URL: http://office-service:8080
       JWT_ISSUER: ${JWT_ISSUER}
       JWT_AUDIENCE: redblack-oa
       JWT_PUBLIC_KEY_PATH: /run/redblack/jwt-public.pem
@@ -148,6 +153,93 @@ services:
     mem_limit: 640m
     networks: [backend]
 
+  office-service:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        JAR_FILE: office-service/target/office-service-1.0.0-SNAPSHOT.jar
+    restart: unless-stopped
+    environment:
+      TZ: UTC
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70 -Duser.timezone=UTC
+      OFFICE_DB_URL: jdbc:mysql://mysql:3306/redblack_office?useUnicode=true&characterEncoding=utf8&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+      OFFICE_DB_USERNAME: ${OFFICE_DB_USERNAME}
+      OFFICE_DB_PASSWORD: ${OFFICE_DB_PASSWORD}
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      IDENTITY_SERVICE_URL: http://identity-service:8080
+      APPROVAL_SERVICE_URL: http://approval-service:8080
+      JWT_ISSUER: ${JWT_ISSUER}
+      JWT_AUDIENCE: redblack-oa
+      JWT_PUBLIC_KEY_PATH: /run/redblack/jwt-public.pem
+      INTERNAL_SERVICE_TOKEN_SECRET: ${INTERNAL_SERVICE_TOKEN_SECRET}
+      OSS_REGION: ${OSS_REGION:-}
+      OSS_ENDPOINT: ${OSS_ENDPOINT:-}
+      OSS_BUCKET: ${OSS_BUCKET:-}
+      OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID:-}
+      OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET:-}
+      OSS_PREFIX: ${OSS_PREFIX:-redblack/v1/}
+    volumes:
+      - ./secrets/jwt-public.pem:/run/redblack/jwt-public.pem:ro
+    depends_on:
+      identity-service:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    mem_limit: 640m
+    networks: [backend]
+
+  audit-service:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        JAR_FILE: audit-service/target/audit-service-1.0.0-SNAPSHOT.jar
+    restart: unless-stopped
+    environment:
+      TZ: UTC
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70 -Duser.timezone=UTC
+      AUDIT_DB_URL: jdbc:mysql://mysql:3306/redblack_audit?useUnicode=true&characterEncoding=utf8&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+      AUDIT_DB_USERNAME: ${AUDIT_DB_USERNAME}
+      AUDIT_DB_PASSWORD: ${AUDIT_DB_PASSWORD}
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      IDENTITY_SERVICE_URL: http://identity-service:8080
+      JWT_ISSUER: ${JWT_ISSUER}
+      JWT_AUDIENCE: redblack-oa
+      JWT_PUBLIC_KEY_PATH: /run/redblack/jwt-public.pem
+      INTERNAL_SERVICE_TOKEN_SECRET: ${INTERNAL_SERVICE_TOKEN_SECRET}
+    volumes:
+      - ./secrets/jwt-public.pem:/run/redblack/jwt-public.pem:ro
+    depends_on:
+      identity-service:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    mem_limit: 512m
+    networks: [backend]
+
   gateway-service:
     build:
       context: ..
@@ -161,6 +253,8 @@ services:
       REDIS_HOST: redis
       IDENTITY_SERVICE_URL: http://identity-service:8080
       APPROVAL_SERVICE_URL: http://approval-service:8080
+      OFFICE_SERVICE_URL: http://office-service:8080
+      AUDIT_SERVICE_URL: http://audit-service:8080
       JWT_ISSUER: ${JWT_ISSUER}
       JWT_AUDIENCE: redblack-oa
       JWT_PUBLIC_KEY_PATH: /run/redblack/jwt-public.pem
@@ -171,6 +265,10 @@ services:
       identity-service:
         condition: service_healthy
       approval-service:
+        condition: service_healthy
+      office-service:
+        condition: service_healthy
+      audit-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]

@@ -50,14 +50,11 @@ class LeaveValidationServiceTest {
     }
 
     @Test
-    void nonEmptyAttachmentsFailUntilOfficeStorageExists() {
+    void acceptsValidAttachmentIdsForOfficeReservation() {
         SaveLeaveApplicationRequest request = new SaveLeaveApplicationRequest(null, null, null, null,
                 null, null, null, List.of("50001"));
-        assertThatThrownBy(() -> service.validate(request, 10003L, "request-id"))
-                .isInstanceOfSatisfying(BusinessException.class, exception -> {
-                    assertThat(exception.code()).isEqualTo("FILE_STORAGE_UNAVAILABLE");
-                    assertThat(exception.status().value()).isEqualTo(503);
-                });
+        assertThat(service.validate(request, 10003L, "request-id").attachmentIds())
+                .containsExactly(50001L);
     }
 
     private void assertCode(SaveLeaveApplicationRequest request, String code) {

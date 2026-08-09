@@ -19,6 +19,7 @@ import com.redblack.approval.domain.LeaveApplicationEntity;
 import com.redblack.approval.infrastructure.identity.IdentityClient;
 import com.redblack.approval.infrastructure.identity.IdentityClient.ApprovalContext;
 import com.redblack.approval.infrastructure.identity.IdentityClient.AuthorizationSnapshot;
+import com.redblack.approval.infrastructure.office.OfficeFileClient;
 import com.redblack.approval.infrastructure.persistence.ApprovalTaskMapper;
 import com.redblack.approval.infrastructure.persistence.AttachmentMapper;
 import com.redblack.approval.infrastructure.persistence.LeaveApplicationMapper;
@@ -33,6 +34,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class LeaveApplicationService {
@@ -46,6 +48,7 @@ public class LeaveApplicationService {
     private final ApprovalRecordService records;
     private final ApprovalViewAssembler assembler;
     private final OutboxService outbox;
+    private final OfficeFileClient officeFiles;
     private final Clock clock;
 
     public LeaveApplicationService(LeaveApplicationMapper applications,
@@ -58,6 +61,7 @@ public class LeaveApplicationService {
                                    ApprovalRecordService records,
                                    ApprovalViewAssembler assembler,
                                    OutboxService outbox,
+                                   OfficeFileClient officeFiles,
                                    Clock clock) {
         this.applications = applications;
         this.tasks = tasks;
@@ -69,6 +73,7 @@ public class LeaveApplicationService {
         this.records = records;
         this.assembler = assembler;
         this.outbox = outbox;
+        this.officeFiles = officeFiles;
         this.clock = clock;
     }
 
@@ -126,6 +131,8 @@ public class LeaveApplicationService {
         ActorAuthorization actor = authorization.require(jwt, "leave:create", requestId);
         ApprovalContext applicant = identityClient.approvalContext(actor.actorId(), requestId);
         DraftValues values = validation.validate(request, actor.actorId(), requestId);
+        String reservationId = UUID.randomUUID().toString();
+        officeFiles.reserve(reservationId, actor.actorId(), values.attachmentIds(), null, requestId);
         LocalDateTime now = now();
         LeaveApplicationEntity application = new LeaveApplicationEntity();
         application.setApplicationNo(applicationNumbers.next());
@@ -141,6 +148,8 @@ public class LeaveApplicationService {
         application.setCreatedAt(now);
         application.setUpdatedAt(now);
         applications.insert(application);
+        replaceAttachments(application.getId(), values.attachmentIds(), now);
+        emitAttachmentChange(application.getId(), actor.actorId(), reservationId, values.attachmentIds(), requestId);
         records.append(application.getId(), 0, ApprovalAction.CREATE, applicant, null, LeaveStatus.DRAFT.name(),
                 null, null);
         outbox.audit("LEAVE_CREATED", "LEAVE_APPLICATION", application.getId().toString(),
@@ -166,9 +175,13 @@ public class LeaveApplicationService {
         requireEditable(application);
         requireVersion(application.getVersion(), request.version());
         DraftValues values = validation.validate(request, actor.actorId(), requestId);
+        String reservationId = UUID.randomUUID().toString();
+        officeFiles.reserve(reservationId, actor.actorId(), values.attachmentIds(), applicationId, requestId);
         apply(application, values);
         application.setUpdatedAt(now());
         update(application);
+        replaceAttachments(applicationId, values.attachmentIds(), now());
+        emitAttachmentChange(applicationId, actor.actorId(), reservationId, values.attachmentIds(), requestId);
         outbox.audit("LEAVE_UPDATED", "LEAVE_APPLICATION", application.getId().toString(),
                 Long.toString(actor.actorId()), requestId);
         return assembler.leave(application, actor);
@@ -187,6 +200,8 @@ public class LeaveApplicationService {
         if (applications.softDelete(application.getId(), application.getVersion(), now) != 1) {
             throw BusinessException.versionConflict();
         }
+        attachments.deleteByApplication(applicationId);
+        emitAttachmentChange(applicationId, actor.actorId(), UUID.randomUUID().toString(), List.of(), requestId);
         outbox.audit("LEAVE_DELETED", "LEAVE_APPLICATION", application.getId().toString(),
                 Long.toString(actor.actorId()), requestId);
     }
@@ -314,12 +329,29 @@ public class LeaveApplicationService {
 
     private Map<String, Object> eventPayload(LeaveApplicationEntity application, Map<String, String> additions) {
         java.util.LinkedHashMap<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("applicationId", application.getId().toString());
         payload.put("applicationNo", application.getApplicationNo());
         payload.put("applicantId", application.getApplicantId().toString());
+        put(payload, "applicantName", application.getApplicantName());
+        put(payload, "departmentId", application.getDepartmentId());
+        put(payload, "departmentName", application.getDepartmentName());
         payload.put("status", application.getStatus().name());
         payload.put("submissionRound", application.getSubmissionRound());
+        payload.put("version", application.getVersion());
+        put(payload, "leaveType", application.getLeaveType());
+        put(payload, "startTime", application.getStartTime());
+        put(payload, "endTime", application.getEndTime());
+        put(payload, "durationHours", application.getLeaveDurationHours());
+        put(payload, "urgency", application.getUrgency());
+        put(payload, "createdAt", application.getCreatedAt());
+        put(payload, "submittedAt", application.getSubmittedAt());
+        put(payload, "updatedAt", application.getUpdatedAt());
         payload.putAll(additions);
         return Map.copyOf(payload);
+    }
+
+    private void put(Map<String, Object> payload, String key, Object value) {
+        if (value != null) payload.put(key, value);
     }
 
     private void requireReadable(ActorAuthorization actor, LeaveApplicationEntity application) {
@@ -370,6 +402,21 @@ public class LeaveApplicationService {
         application.setHandoverUserId(values.handover() == null ? null : Long.parseLong(values.handover().userId()));
         application.setHandoverUserName(values.handover() == null ? null : values.handover().name());
         application.setContactPhone(values.contactPhone());
+    }
+
+    private void replaceAttachments(long applicationId, List<Long> fileIds, LocalDateTime createdAt) {
+        attachments.deleteByApplication(applicationId);
+        for (int index = 0; index < fileIds.size(); index++) {
+            attachments.insert(applicationId, fileIds.get(index), index, createdAt);
+        }
+    }
+
+    private void emitAttachmentChange(long applicationId, long ownerId, String reservationId,
+                                      List<Long> fileIds, String requestId) {
+        outbox.approval("LEAVE_ATTACHMENTS_CHANGED", Long.toString(applicationId), Long.toString(ownerId), requestId,
+                Map.of("applicationId", Long.toString(applicationId), "ownerId", Long.toString(ownerId),
+                        "reservationId", reservationId,
+                        "fileIds", fileIds.stream().map(String::valueOf).toList()));
     }
 
     private void update(LeaveApplicationEntity application) {

@@ -1,0 +1,44 @@
+package com.redblack.office.application;
+
+import com.redblack.office.domain.OutboxEventEntity;
+import com.redblack.office.infrastructure.persistence.OutboxEventMapper;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.concurrent.TimeUnit;
+
+@Component
+public class OfficeOutboxPublisher {
+    private final OutboxEventMapper mapper;
+    private final KafkaTemplate<String, String> kafka;
+    private final Clock clock;
+
+    public OfficeOutboxPublisher(OutboxEventMapper mapper, KafkaTemplate<String, String> kafka, Clock clock) {
+        this.mapper = mapper;
+        this.kafka = kafka;
+        this.clock = clock;
+    }
+
+    @Scheduled(fixedDelayString = "${redblack.outbox.fixed-delay:3000}")
+    public void publishPending() {
+        LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
+        for (OutboxEventEntity event : mapper.findPending(now, 50)) publish(event);
+    }
+
+    private void publish(OutboxEventEntity event) {
+        try {
+            kafka.send(event.getTopic(), event.getMessageKey(), event.getPayload()).get(5, TimeUnit.SECONDS);
+            mapper.markSent(event.getEventId(), LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
+        } catch (Exception exception) {
+            int attempts = event.getAttempts() == null ? 0 : event.getAttempts();
+            LocalDateTime next = LocalDateTime.ofInstant(clock.instant().plus(OutboxBackoffPolicy.forAttempt(attempts)),
+                    ZoneOffset.UTC);
+            String message = exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage();
+            mapper.markRetry(event.getEventId(), next, message.substring(0, Math.min(message.length(), 1000)));
+        }
+    }
+}

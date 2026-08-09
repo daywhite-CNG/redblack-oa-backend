@@ -36,6 +36,7 @@
         <aliyun-oss.version>3.18.5</aliyun-oss.version>
         <springdoc.version>2.8.17</springdoc.version>
         <nimbus-jose-jwt.version>10.5</nimbus-jose-jwt.version>
+        <jsoup.version>1.22.2</jsoup.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     </properties>

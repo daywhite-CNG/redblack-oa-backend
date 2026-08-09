@@ -15,6 +15,8 @@ import com.redblack.approval.domain.ApprovalRecordEntity;
 import com.redblack.approval.domain.ApprovalTaskEntity;
 import com.redblack.approval.domain.LeaveApplicationEntity;
 import com.redblack.approval.infrastructure.persistence.ApprovalRecordMapper;
+import com.redblack.approval.infrastructure.persistence.AttachmentMapper;
+import com.redblack.approval.infrastructure.office.OfficeFileClient;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -28,9 +30,14 @@ import java.util.Map;
 @Component
 public class ApprovalViewAssembler {
     private final ApprovalRecordMapper recordMapper;
+    private final AttachmentMapper attachmentMapper;
+    private final OfficeFileClient officeFiles;
 
-    public ApprovalViewAssembler(ApprovalRecordMapper recordMapper) {
+    public ApprovalViewAssembler(ApprovalRecordMapper recordMapper, AttachmentMapper attachmentMapper,
+                                 OfficeFileClient officeFiles) {
         this.recordMapper = recordMapper;
+        this.attachmentMapper = attachmentMapper;
+        this.officeFiles = officeFiles;
     }
 
     public LeaveApplicationView leave(LeaveApplicationEntity application, ActorAuthorization actor) {
@@ -49,7 +56,7 @@ public class ApprovalViewAssembler {
                 application.getReason(),
                 user(application.getHandoverUserId(), application.getHandoverUserName(), null),
                 application.getContactPhone(),
-                List.of(),
+                officeFiles.metadata(attachmentMapper.findIds(application.getId())),
                 application.getStatus(),
                 application.getSubmissionRound(),
                 application.getStatus() == com.redblack.approval.domain.ApprovalEnums.LeaveStatus.PENDING

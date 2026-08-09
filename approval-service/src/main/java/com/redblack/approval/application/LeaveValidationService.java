@@ -28,11 +28,11 @@ public class LeaveValidationService {
     }
 
     public DraftValues validate(SaveLeaveApplicationRequest request, long actorId, String requestId) {
-        validateAttachments(request.attachmentIds());
+        List<Long> attachmentIds = validateAttachments(request.attachmentIds());
         ApprovalContext handover = validateHandover(request.handoverUserId(), actorId, requestId);
         return new DraftValues(request.leaveType(), utc(request.startTime()), utc(request.endTime()),
                 duration(request.startTime(), request.endTime()), request.urgency(), trim(request.reason()), handover,
-                trim(request.contactPhone()));
+                trim(request.contactPhone()), attachmentIds);
     }
 
     public DraftValues validate(UpdateLeaveApplicationRequest request, long actorId, String requestId) {
@@ -51,10 +51,6 @@ public class LeaveValidationService {
         }
         if (application.getLeaveType() == LeaveType.SICK && attachmentIds.isEmpty()) {
             throw new BusinessException(HttpStatus.UNPROCESSABLE_ENTITY, "SICK_ATTACHMENT_REQUIRED", "病假必须提供证明附件");
-        }
-        if (!attachmentIds.isEmpty()) {
-            throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "FILE_STORAGE_UNAVAILABLE",
-                    "附件服务尚未就绪，暂不能提交带附件申请");
         }
         duration(application.getStartTime().atOffset(ZoneOffset.UTC), application.getEndTime().atOffset(ZoneOffset.UTC));
     }
@@ -86,16 +82,18 @@ public class LeaveValidationService {
         }
     }
 
-    private void validateAttachments(List<String> attachmentIds) {
+    private List<Long> validateAttachments(List<String> attachmentIds) {
         if (attachmentIds == null || attachmentIds.isEmpty()) {
-            return;
+            return List.of();
         }
         if (new HashSet<>(attachmentIds).size() != attachmentIds.size()) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "附件 ID 不能重复",
                     List.of(new ErrorDetail("attachmentIds", "附件 ID 不能重复")));
         }
-        throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "FILE_STORAGE_UNAVAILABLE",
-                "附件服务尚未就绪，暂不能绑定附件");
+        try { return attachmentIds.stream().map(Long::parseLong).toList(); }
+        catch (RuntimeException exception) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "附件 ID 无效");
+        }
     }
 
     private BigDecimal duration(OffsetDateTime start, OffsetDateTime end) {
@@ -133,6 +131,7 @@ public class LeaveValidationService {
                               com.redblack.approval.domain.ApprovalEnums.Urgency urgency,
                               String reason,
                               ApprovalContext handover,
-                              String contactPhone) {
+                              String contactPhone,
+                              List<Long> attachmentIds) {
     }
 }

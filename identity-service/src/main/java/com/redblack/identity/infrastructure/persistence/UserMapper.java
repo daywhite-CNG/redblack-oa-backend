@@ -58,4 +58,16 @@ public interface UserMapper extends BaseMapper<UserEntity> {
 
     @Select("SELECT id FROM sys_user ORDER BY id")
     List<Long> findAllIds();
+
+    @Select("""
+            <script>
+            SELECT * FROM sys_user WHERE status='ENABLED'
+            <if test="departmentIds != null and !departmentIds.isEmpty()">
+              AND department_id IN
+              <foreach collection="departmentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </if>
+            ORDER BY id
+            </script>
+            """)
+    List<UserEntity> findEnabledAudience(@Param("departmentIds") List<Long> departmentIds);
 }

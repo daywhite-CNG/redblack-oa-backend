@@ -6,6 +6,8 @@ import com.redblack.approval.api.RequestIds;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
@@ -15,6 +17,7 @@ import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.web.SecurityFilterChain;
 
 import java.io.IOException;
@@ -22,13 +25,29 @@ import java.security.interfaces.RSAPublicKey;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.nio.charset.StandardCharsets;
+import javax.crypto.spec.SecretKeySpec;
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(ApprovalSecurityProperties.class)
 public class ApprovalSecurityConfiguration {
     @Bean
+    @Order(1)
+    SecurityFilterChain approvalInternalSecurityFilterChain(HttpSecurity http,
+            @Qualifier("approvalInternalJwtDecoder") JwtDecoder decoder, ObjectMapper objectMapper) throws Exception {
+        return http.securityMatcher("/internal/v1/**").csrf(csrf -> csrf.disable())
+                .authorizeHttpRequests(requests -> requests.anyRequest().authenticated())
+                .oauth2ResourceServer(resource -> resource.jwt(jwt -> jwt.decoder(decoder))
+                        .authenticationEntryPoint((request, response, exception) -> writeSecurityError(response,
+                                objectMapper, HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "内部服务凭据无效",
+                                RequestIds.get(request))))
+                .build();
+    }
+
+    @Bean
+    @Order(2)
     SecurityFilterChain approvalSecurityFilterChain(HttpSecurity http,
-                                                     JwtDecoder approvalJwtDecoder,
+                                                     @Qualifier("approvalJwtDecoder") JwtDecoder approvalJwtDecoder,
                                                      ObjectMapper objectMapper) throws Exception {
         return http
                 .csrf(csrf -> csrf.disable())
@@ -58,6 +77,23 @@ public class ApprovalSecurityConfiguration {
                 value -> value != null && value.contains(properties.getAudience()));
         OAuth2TokenValidator<Jwt> type = new JwtClaimValidator<String>("typ", "access"::equals);
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(issuer, audience, type));
+        return decoder;
+    }
+
+    @Bean
+    JwtDecoder approvalInternalJwtDecoder(ApprovalSecurityProperties properties) {
+        if (properties.getInternalSecret() == null || properties.getInternalSecret().length() < 32) {
+            throw new IllegalStateException("INTERNAL_SERVICE_TOKEN_SECRET must contain at least 32 characters");
+        }
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(new SecretKeySpec(
+                        properties.getInternalSecret().getBytes(StandardCharsets.UTF_8), "HmacSHA256"))
+                .macAlgorithm(org.springframework.security.oauth2.jose.jws.MacAlgorithm.HS256).build();
+        var timestamp = new JwtTimestampValidator();
+        var audience = new JwtClaimValidator<List<String>>("aud",
+                value -> value != null && value.contains("redblack-internal"));
+        var type = new JwtClaimValidator<String>("typ", "service"::equals);
+        var subject = new JwtClaimValidator<String>("sub", "office-service"::equals);
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<Jwt>(timestamp, audience, type, subject));
         return decoder;
     }
 

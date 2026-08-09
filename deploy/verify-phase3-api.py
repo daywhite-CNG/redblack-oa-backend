@@ -263,11 +263,11 @@ def main():
         assert sick_error["code"] == "SICK_ATTACHMENT_REQUIRED"
         client.call("DELETE", f"/leave-applications/{sick['id']}?version={sick['version']}", 204,
                     token=employee, operation="DELETE /leave-applications/{applicationId}")
-        storage_error = client.call(
-            "POST", "/leave-applications", 503, token=employee, idempotency_key=key(),
+        binding_error = client.call(
+            "POST", "/leave-applications", 422, token=employee, idempotency_key=key(),
             body={**leave_body(), "attachmentIds": ["50001"]},
             operation="POST /leave-applications")[1]
-        assert storage_error["code"] == "FILE_STORAGE_UNAVAILABLE"
+        assert binding_error["code"] == "FILE_BINDING_INVALID"
 
         missing = PUBLIC_OPERATIONS - client.covered
         if missing:

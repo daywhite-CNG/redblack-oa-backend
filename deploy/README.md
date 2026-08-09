@@ -49,6 +49,18 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yml ps
 
 脚本创建独立的 `redblack_approval` 数据库和服务账号；若 `.env` 尚未配置审批库密码，脚本会生成随机密码并保持文件权限为 `600`。全新 MySQL 卷会自动执行 `deploy/mysql-init/01-create-service-databases.sh`。
 
+### 在既有 MySQL 卷上增加办公与审计库
+
+第四阶段升级既有部署时，在启动 `office-service` 和 `audit-service` 前执行一次：
+
+```bash
+./deploy/prepare-phase4-databases.sh
+```
+
+脚本会生成独立数据库账号。真实附件上传还必须在 `deploy/.env` 配置私有 OSS 的
+`OSS_REGION`、`OSS_ENDPOINT`、`OSS_BUCKET`、`OSS_ACCESS_KEY_ID` 和 `OSS_ACCESS_KEY_SECRET`。
+未配置时 Office 服务仍可启动，但文件上传和内容读取按契约返回 `503 DEPENDENCY_UNAVAILABLE`。
+
 ## 验收
 
 ```bash

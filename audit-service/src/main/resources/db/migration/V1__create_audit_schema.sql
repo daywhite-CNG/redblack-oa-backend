@@ -1,0 +1,43 @@
+CREATE TABLE audit_operation_log (
+    id BIGINT UNSIGNED NOT NULL,
+    source_event_id CHAR(36) NOT NULL,
+    module_name VARCHAR(50) NOT NULL,
+    operation_type VARCHAR(50) NOT NULL,
+    operator_id BIGINT UNSIGNED NOT NULL,
+    operator_name VARCHAR(50) NOT NULL,
+    operator_department_id BIGINT UNSIGNED NULL,
+    request_method VARCHAR(10) NOT NULL,
+    request_path VARCHAR(500) NOT NULL,
+    ip_address VARCHAR(64) NOT NULL,
+    operation_result VARCHAR(16) NOT NULL,
+    business_type VARCHAR(100) NULL,
+    business_id VARCHAR(100) NULL,
+    summary VARCHAR(500) NULL,
+    error_code VARCHAR(100) NULL,
+    duration_ms BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    operated_at DATETIME(3) NOT NULL,
+    request_id VARCHAR(100) NOT NULL,
+    created_at DATETIME(3) NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_audit_source_event (source_event_id),
+    KEY idx_audit_operated_at (operated_at),
+    KEY idx_audit_operator (operator_name, operated_at),
+    KEY idx_audit_module_type (module_name, operation_type, operated_at),
+    CONSTRAINT ck_audit_result CHECK (operation_result IN ('SUCCESS','FAILURE'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE audit_inbox_event (
+    event_id CHAR(36) NOT NULL,
+    topic VARCHAR(200) NOT NULL,
+    event_type VARCHAR(100) NOT NULL,
+    payload JSON NOT NULL,
+    status VARCHAR(16) NOT NULL,
+    attempts INT UNSIGNED NOT NULL DEFAULT 0,
+    next_attempt_at DATETIME(3) NOT NULL,
+    received_at DATETIME(3) NOT NULL,
+    processed_at DATETIME(3) NULL,
+    last_error VARCHAR(1000) NULL,
+    PRIMARY KEY (event_id),
+    KEY idx_audit_inbox_pending (status, next_attempt_at, received_at),
+    CONSTRAINT ck_audit_inbox_status CHECK (status IN ('PENDING','PROCESSED','DEAD'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

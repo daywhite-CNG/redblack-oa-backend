@@ -303,4 +303,10 @@ public final class IdentityApiModels {
 
     public record UserSummary(String id, String name, String departmentId, String avatarUrl) {
     }
+
+    public record AudienceRequest(String scopeType, List<String> departmentIds) {
+    }
+
+    public record AudienceUser(String id, String name, String departmentId) {
+    }
 }

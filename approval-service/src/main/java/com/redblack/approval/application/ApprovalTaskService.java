@@ -274,12 +274,29 @@ public class ApprovalTaskService {
 
     private Map<String, Object> eventPayload(LeaveApplicationEntity application, Map<String, String> additions) {
         LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
+        payload.put("applicationId", application.getId().toString());
         payload.put("applicationNo", application.getApplicationNo());
         payload.put("applicantId", application.getApplicantId().toString());
+        put(payload, "applicantName", application.getApplicantName());
+        put(payload, "departmentId", application.getDepartmentId());
+        put(payload, "departmentName", application.getDepartmentName());
         payload.put("status", application.getStatus().name());
         payload.put("submissionRound", application.getSubmissionRound());
+        payload.put("version", application.getVersion());
+        put(payload, "leaveType", application.getLeaveType());
+        put(payload, "startTime", application.getStartTime());
+        put(payload, "endTime", application.getEndTime());
+        put(payload, "durationHours", application.getLeaveDurationHours());
+        put(payload, "urgency", application.getUrgency());
+        put(payload, "createdAt", application.getCreatedAt());
+        put(payload, "submittedAt", application.getSubmittedAt());
+        put(payload, "updatedAt", application.getUpdatedAt());
         payload.putAll(additions);
         return Map.copyOf(payload);
+    }
+
+    private void put(Map<String, Object> payload, String key, Object value) {
+        if (value != null) payload.put(key, value);
     }
 
     private ApprovalTaskEntity requiredTask(long taskId) {
