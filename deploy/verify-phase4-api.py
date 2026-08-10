@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import hashlib
 import json
 import sys
 import time
@@ -27,7 +28,7 @@ class ApiClient:
         self.covered = set()
 
     def call(self, method, path, expected, token=None, body=None, idempotency_key=None,
-             operation=None, raw_body=None, content_type=None):
+             operation=None, raw_body=None, content_type=None, binary=False):
         request_id = "phase4_" + uuid.uuid4().hex
         headers = {"Accept": "application/json", "X-Request-Id": request_id}
         payload = raw_body
@@ -45,14 +46,19 @@ class ApiClient:
             with urlopen(request, timeout=25) as response:
                 status = response.status
                 raw = response.read()
+                response_headers = response.headers
         except HTTPError as error:
             status = error.code
             raw = error.read()
+            response_headers = error.headers
         expected_values = {expected} if isinstance(expected, int) else set(expected)
-        data = json.loads(raw.decode("utf-8")) if raw else None
+        data = raw if binary else (json.loads(raw.decode("utf-8")) if raw else None)
         if status not in expected_values:
             raise AssertionError(f"{method} {path}: expected {sorted(expected_values)}, got {status}: {data}")
-        if data is not None:
+        if binary:
+            if not response_headers.get("X-Request-Id"):
+                raise AssertionError(f"{method} {path}: response has no X-Request-Id")
+        elif data is not None:
             for field in ("requestId",):
                 if field not in data:
                     raise AssertionError(f"{method} {path}: response has no {field}")
@@ -103,7 +109,7 @@ def multipart_png():
         'Content-Disposition: form-data; name="file"; filename="phase4.png"\r\n'
         "Content-Type: image/png\r\n\r\n"
     ).encode("ascii") + content + f"\r\n--{boundary}--\r\n".encode("ascii")
-    return body, "multipart/form-data; boundary=" + boundary
+    return body, "multipart/form-data; boundary=" + boundary, content
 
 
 def wait_for(client, action, timeout=30):
@@ -207,10 +213,25 @@ def main():
                 operation="DELETE /files/{fileId}")
     client.call("GET", f"/files/{missing_id}/content", 404, token=employee,
                 operation="GET /files/{fileId}/content")
-    upload_body, upload_type = multipart_png()
-    unavailable = client.call("POST", "/files", 503, token=employee, raw_body=upload_body,
-                              content_type=upload_type, idempotency_key=key(), operation="POST /files")[1]
-    assert unavailable["code"] == "DEPENDENCY_UNAVAILABLE"
+    upload_body, upload_type, upload_content = multipart_png()
+    upload_key = key()
+    uploaded = data(client.call("POST", "/files", 201, token=employee, raw_body=upload_body,
+                                content_type=upload_type, idempotency_key=upload_key,
+                                operation="POST /files"))
+    replayed = data(client.call("POST", "/files", 201, token=employee, raw_body=upload_body,
+                                content_type=upload_type, idempotency_key=upload_key))
+    assert replayed["id"] == uploaded["id"]
+    file_id = uploaded["id"]
+    metadata = data(client.call("GET", f"/files/{file_id}", 200, token=employee,
+                                operation="GET /files/{fileId}"))
+    assert metadata["id"] == file_id and metadata["size"] == len(upload_content)
+    downloaded = client.call("GET", f"/files/{file_id}/content", 200, token=employee,
+                             operation="GET /files/{fileId}/content", binary=True)[1]
+    upload_sha256 = hashlib.sha256(upload_content).hexdigest()
+    assert hashlib.sha256(downloaded).hexdigest() == upload_sha256
+    client.call("DELETE", f"/files/{file_id}", 204, token=employee,
+                operation="DELETE /files/{fileId}")
+    assert client.call("GET", f"/files/{file_id}", 404, token=employee)[1]["code"] == "RESOURCE_NOT_FOUND"
 
     def audit_for_notice():
         page = data(client.call("GET", "/operation-logs?operationType=NOTICE_CREATED&page=1&pageSize=100",
@@ -227,7 +248,7 @@ def main():
     extra = client.covered - PUBLIC_OPERATIONS
     if missing or extra:
         raise AssertionError(f"operation coverage mismatch missing={sorted(missing)} extra={sorted(extra)}")
-    print(f"PHASE4_API_OK operations={len(client.covered)}/20 notice={notice_id} notification={notification['id']} audit={audit['id']} oss=503_expected")
+    print(f"PHASE4_API_OK operations={len(client.covered)}/20 notice={notice_id} notification={notification['id']} audit={audit['id']} file={file_id} oss=roundtrip_sha256:{upload_sha256}")
 
 
 if __name__ == "__main__":
