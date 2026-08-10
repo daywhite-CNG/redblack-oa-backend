@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.HexFormat;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 @Service
@@ -33,6 +34,14 @@ public class IdempotencyService {
     @Transactional
     public <T> T execute(Jwt jwt, String method, String path, String idempotencyKey, Object request,
                          Class<T> responseType, Runnable authorization, Supplier<T> operation) {
+        return execute(jwt, method, path, idempotencyKey, request, responseType, authorization, operation,
+                ignored -> null);
+    }
+
+    @Transactional
+    public <T> T execute(Jwt jwt, String method, String path, String idempotencyKey, Object request,
+                         Class<T> responseType, Runnable authorization, Supplier<T> operation,
+                         Function<T, Long> fileIdExtractor) {
         authorization.run();
         String key = normalize(idempotencyKey);
         long actorId = actor(jwt);
@@ -41,7 +50,7 @@ public class IdempotencyService {
         for (int attempt = 0; attempt < 2; attempt++) {
             if (mapper.claim(actorId, method, path, key, requestHash, now, now.plus(RETENTION)) == 1) {
                 T response = operation.get();
-                if (mapper.complete(actorId, method, path, key, write(response)) != 1) {
+                if (mapper.complete(actorId, method, path, key, write(response), fileIdExtractor.apply(response)) != 1) {
                     throw new IllegalStateException("Failed to complete idempotency record");
                 }
                 return response;

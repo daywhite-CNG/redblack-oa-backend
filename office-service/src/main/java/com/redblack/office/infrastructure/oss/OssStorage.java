@@ -15,13 +15,13 @@ public class OssStorage {
 
     public OssStorage(OssProperties properties) { this.properties = properties; }
 
-    public void put(String objectKey, byte[] content, String contentType) {
-        execute(client -> {
+    public String put(String objectKey, byte[] content, String contentType) {
+        return execute(client -> {
             ObjectMetadata metadata = new ObjectMetadata();
             metadata.setContentLength(content.length);
             metadata.setContentType(contentType);
-            client.putObject(properties.getBucket(), objectKey, new ByteArrayInputStream(content), metadata);
-            return null;
+            return client.putObject(properties.getBucket(), objectKey,
+                    new ByteArrayInputStream(content), metadata).getETag();
         });
     }
 

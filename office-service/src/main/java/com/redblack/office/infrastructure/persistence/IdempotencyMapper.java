@@ -19,7 +19,8 @@ public interface IdempotencyMapper {
               @Param("expiresAt") LocalDateTime expiresAt);
 
     @Select("""
-            SELECT request_hash AS requestHash,status,response_body AS responseBody,expires_at AS expiresAt
+            SELECT request_hash AS requestHash,status,response_body AS responseBody,file_id AS fileId,
+              expires_at AS expiresAt
             FROM office_idempotency_record WHERE actor_id=#{actorId} AND http_method=#{method}
               AND request_path=#{path} AND idempotency_key=#{key}
             """)
@@ -27,12 +28,14 @@ public interface IdempotencyMapper {
                 @Param("path") String path, @Param("key") String key);
 
     @Update("""
-            UPDATE office_idempotency_record SET status='COMPLETED',response_body=CAST(#{body} AS JSON)
+            UPDATE office_idempotency_record SET status='COMPLETED',response_body=CAST(#{body} AS JSON),
+              file_id=#{fileId}
             WHERE actor_id=#{actorId} AND http_method=#{method} AND request_path=#{path}
               AND idempotency_key=#{key} AND status='PROCESSING'
             """)
     int complete(@Param("actorId") long actorId, @Param("method") String method,
-                 @Param("path") String path, @Param("key") String key, @Param("body") String body);
+                 @Param("path") String path, @Param("key") String key, @Param("body") String body,
+                 @Param("fileId") Long fileId);
 
     @Delete("""
             DELETE FROM office_idempotency_record WHERE actor_id=#{actorId} AND http_method=#{method}
@@ -41,5 +44,6 @@ public interface IdempotencyMapper {
     int deleteExpired(@Param("actorId") long actorId, @Param("method") String method,
                       @Param("path") String path, @Param("key") String key, @Param("now") LocalDateTime now);
 
-    record Record(String requestHash, String status, String responseBody, LocalDateTime expiresAt) { }
+    record Record(String requestHash, String status, String responseBody, Long fileId,
+                  LocalDateTime expiresAt) { }
 }

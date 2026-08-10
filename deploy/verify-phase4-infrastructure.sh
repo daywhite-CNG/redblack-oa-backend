@@ -48,11 +48,15 @@ office_tables=$(office_query "SELECT COUNT(*) FROM information_schema.tables WHE
 audit_tables=$(audit_query "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='redblack_audit' AND table_name IN ('audit_operation_log','audit_inbox_event');")
 office_migrations=$(office_query "SELECT COUNT(*) FROM flyway_schema_history WHERE success=1;")
 audit_migrations=$(audit_query "SELECT COUNT(*) FROM flyway_schema_history WHERE success=1;")
+file_storage_columns=$(office_query "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='redblack_office' AND ((table_name='office_file' AND column_name IN ('storage_provider','bucket','etag','storage_status','cleanup_attempts','cleanup_next_attempt_at','cleanup_last_error')) OR (table_name='office_idempotency_record' AND column_name='file_id'));")
+file_storage_constraints=$(office_query "SELECT COUNT(*) FROM information_schema.table_constraints WHERE constraint_schema='redblack_office' AND constraint_name IN ('ck_office_file_storage_provider','ck_office_file_storage_status','fk_office_idempotency_file');")
 
 [ "$office_tables" = "10" ] || { echo "Expected 10 office tables, got $office_tables" >&2; exit 1; }
 [ "$audit_tables" = "2" ] || { echo "Expected 2 audit tables, got $audit_tables" >&2; exit 1; }
-[ "$office_migrations" = "2" ] || { echo "Expected 2 office migrations, got $office_migrations" >&2; exit 1; }
+[ "$office_migrations" = "3" ] || { echo "Expected 3 office migrations, got $office_migrations" >&2; exit 1; }
 [ "$audit_migrations" = "1" ] || { echo "Expected 1 audit migration, got $audit_migrations" >&2; exit 1; }
+[ "$file_storage_columns" = "8" ] || { echo "Expected 8 file storage columns, got $file_storage_columns" >&2; exit 1; }
+[ "$file_storage_constraints" = "3" ] || { echo "Expected 3 file storage constraints, got $file_storage_constraints" >&2; exit 1; }
 
 redis_ping=$(docker compose exec -T redis redis-cli ping)
 [ "$redis_ping" = "PONG" ] || { echo "Redis ping failed: $redis_ping" >&2; exit 1; }
@@ -80,4 +84,4 @@ done
 [ "$pending_total" -eq 0 ] || { echo "Outbox pending events remain: $pending_total" >&2; exit 1; }
 [ "$inbox_unresolved" -eq 0 ] || { echo "Inbox pending/dead events remain: $inbox_unresolved" >&2; exit 1; }
 
-echo "PHASE4_INFRA_OK containers=9 office_tables=$office_tables audit_tables=$audit_tables redis=$redis_ping kafka=reachable outbox_pending=0 inbox_unresolved=0"
+echo "PHASE4_INFRA_OK containers=9 office_tables=$office_tables audit_tables=$audit_tables file_storage_columns=$file_storage_columns redis=$redis_ping kafka=reachable outbox_pending=0 inbox_unresolved=0"

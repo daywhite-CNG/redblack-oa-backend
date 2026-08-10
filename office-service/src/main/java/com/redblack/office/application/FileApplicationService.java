@@ -99,7 +99,7 @@ public class FileApplicationService {
         String prefix = properties.getPrefix() == null ? "redblack/v1/" : properties.getPrefix();
         if (!prefix.endsWith("/")) prefix += "/";
         String objectKey = prefix + LocalDate.now(clock) + "/" + ownerId + "/" + UUID.randomUUID() + "." + upload.extension();
-        storage.put(objectKey, upload.content(), upload.fingerprint().contentType());
+        String etag = storage.put(objectKey, upload.content(), upload.fingerprint().contentType());
         FileEntity entity = new FileEntity();
         entity.setOwnerId(ownerId);
         entity.setOriginalName(upload.fingerprint().fileName());
@@ -108,6 +108,11 @@ public class FileApplicationService {
         entity.setSizeBytes(upload.fingerprint().size());
         entity.setSha256(upload.fingerprint().sha256());
         entity.setObjectKey(objectKey);
+        entity.setStorageProvider("ALIYUN_OSS");
+        entity.setBucket(properties.getBucket());
+        entity.setEtag(etag);
+        entity.setStorageStatus("AVAILABLE");
+        entity.setCleanupAttempts(0);
         entity.setStatus("TEMPORARY");
         entity.setCreatedAt(now);
         entity.setUpdatedAt(now);

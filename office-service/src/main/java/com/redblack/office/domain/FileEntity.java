@@ -19,6 +19,13 @@ public class FileEntity {
     private Long sizeBytes;
     private String sha256;
     private String objectKey;
+    private String storageProvider;
+    private String bucket;
+    private String etag;
+    private String storageStatus;
+    private Integer cleanupAttempts;
+    private LocalDateTime cleanupNextAttemptAt;
+    private String cleanupLastError;
     private String status;
     private String reservedBy;
     private LocalDateTime reservedUntil;

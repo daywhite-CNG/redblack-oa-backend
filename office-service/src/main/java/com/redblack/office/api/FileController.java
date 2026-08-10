@@ -53,7 +53,7 @@ public class FileController {
         var prepared = service.prepare(file);
         FileSummary result = idempotency.execute(jwt, "POST", "/api/v1/files", key, prepared.fingerprint(),
                 FileSummary.class, () -> service.authorizeUpload(jwt, requestId),
-                () -> service.upload(jwt, prepared, requestId));
+                () -> service.upload(jwt, prepared, requestId), uploaded -> Long.parseLong(uploaded.id()));
         return ResponseEntity.created(URI.create("/api/v1/files/" + result.id()))
                 .body(ApiResponse.success("上传成功", result, requestId));
     }
