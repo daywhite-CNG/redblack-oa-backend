@@ -21,12 +21,16 @@ import java.util.function.Supplier;
 @Service
 public class IdempotencyService {
     private static final Duration RETENTION = Duration.ofHours(24);
+    private static final Duration RECOVERY_DELAY = Duration.ofSeconds(30);
     private final IdempotencyMapper mapper;
+    private final IdempotencyTransactionService transactions;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
-    public IdempotencyService(IdempotencyMapper mapper, ObjectMapper objectMapper, Clock clock) {
+    public IdempotencyService(IdempotencyMapper mapper, IdempotencyTransactionService transactions,
+                              ObjectMapper objectMapper, Clock clock) {
         this.mapper = mapper;
+        this.transactions = transactions;
         this.objectMapper = objectMapper;
         this.clock = clock;
     }
@@ -34,14 +38,6 @@ public class IdempotencyService {
     @Transactional
     public <T> T execute(Jwt jwt, String method, String path, String idempotencyKey, Object request,
                          Class<T> responseType, Runnable authorization, Supplier<T> operation) {
-        return execute(jwt, method, path, idempotencyKey, request, responseType, authorization, operation,
-                ignored -> null);
-    }
-
-    @Transactional
-    public <T> T execute(Jwt jwt, String method, String path, String idempotencyKey, Object request,
-                         Class<T> responseType, Runnable authorization, Supplier<T> operation,
-                         Function<T, Long> fileIdExtractor) {
         authorization.run();
         String key = normalize(idempotencyKey);
         long actorId = actor(jwt);
@@ -50,7 +46,7 @@ public class IdempotencyService {
         for (int attempt = 0; attempt < 2; attempt++) {
             if (mapper.claim(actorId, method, path, key, requestHash, now, now.plus(RETENTION)) == 1) {
                 T response = operation.get();
-                if (mapper.complete(actorId, method, path, key, write(response), fileIdExtractor.apply(response)) != 1) {
+                if (mapper.complete(actorId, method, path, key, write(response), null) != 1) {
                     throw new IllegalStateException("Failed to complete idempotency record");
                 }
                 return response;
@@ -70,6 +66,46 @@ public class IdempotencyService {
             return read(existing.responseBody(), responseType);
         }
         throw new BusinessException(HttpStatus.CONFLICT, "REQUEST_IN_PROGRESS", "相同请求正在处理中");
+    }
+
+    public <T> T executeFileUpload(Jwt jwt, String method, String path, String idempotencyKey, Object request,
+                                   Class<T> responseType, Runnable authorization, Supplier<Long> createFile,
+                                   Function<Long, T> finishUpload) {
+        authorization.run();
+        String key = normalize(idempotencyKey);
+        long actorId = actor(jwt);
+        String requestHash = hash(request);
+        LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
+        IdempotencyTransactionService.Claim claim = transactions.claim(
+                actorId, method, path, key, requestHash, now, now.plus(RETENTION));
+        IdempotencyMapper.Record existing = claim.record();
+        if (existing == null) throw inProgress();
+        if (!existing.requestHash().equals(requestHash)) {
+            throw new BusinessException(HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_REUSED", "同一幂等键不能用于不同请求");
+        }
+        if ("COMPLETED".equals(existing.status()) && existing.responseBody() != null) {
+            return read(existing.responseBody(), responseType);
+        }
+        if (!claim.created() && existing.createdAt() != null
+                && existing.createdAt().plus(RECOVERY_DELAY).isAfter(now)) {
+            throw inProgress();
+        }
+        Long fileId = existing.fileId();
+        if (fileId == null) {
+            fileId = createFile.get();
+            transactions.associateFile(actorId, method, path, key, fileId);
+        }
+        T response = finishUpload.apply(fileId);
+        if (transactions.complete(actorId, method, path, key, write(response), fileId)) return response;
+        IdempotencyMapper.Record completed = transactions.find(actorId, method, path, key);
+        if (completed != null && "COMPLETED".equals(completed.status()) && completed.responseBody() != null) {
+            return read(completed.responseBody(), responseType);
+        }
+        throw inProgress();
+    }
+
+    private BusinessException inProgress() {
+        return new BusinessException(HttpStatus.CONFLICT, "REQUEST_IN_PROGRESS", "相同请求正在处理中");
     }
 
     private String normalize(String value) {

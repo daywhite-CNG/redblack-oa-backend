@@ -20,7 +20,7 @@ public interface IdempotencyMapper {
 
     @Select("""
             SELECT request_hash AS requestHash,status,response_body AS responseBody,file_id AS fileId,
-              expires_at AS expiresAt
+              created_at AS createdAt,expires_at AS expiresAt
             FROM office_idempotency_record WHERE actor_id=#{actorId} AND http_method=#{method}
               AND request_path=#{path} AND idempotency_key=#{key}
             """)
@@ -37,6 +37,15 @@ public interface IdempotencyMapper {
                  @Param("path") String path, @Param("key") String key, @Param("body") String body,
                  @Param("fileId") Long fileId);
 
+    @Update("""
+            UPDATE office_idempotency_record SET file_id=#{fileId}
+            WHERE actor_id=#{actorId} AND http_method=#{method} AND request_path=#{path}
+              AND idempotency_key=#{key} AND status='PROCESSING' AND file_id IS NULL
+            """)
+    int associateFile(@Param("actorId") long actorId, @Param("method") String method,
+                      @Param("path") String path, @Param("key") String key,
+                      @Param("fileId") long fileId);
+
     @Delete("""
             DELETE FROM office_idempotency_record WHERE actor_id=#{actorId} AND http_method=#{method}
               AND request_path=#{path} AND idempotency_key=#{key} AND expires_at <= #{now}
@@ -45,5 +54,5 @@ public interface IdempotencyMapper {
                       @Param("path") String path, @Param("key") String key, @Param("now") LocalDateTime now);
 
     record Record(String requestHash, String status, String responseBody, Long fileId,
-                  LocalDateTime expiresAt) { }
+                  LocalDateTime createdAt, LocalDateTime expiresAt) { }
 }

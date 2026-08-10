@@ -51,9 +51,10 @@ public class FileController {
                                                      HttpServletRequest request) {
         String requestId = RequestIds.get(request);
         var prepared = service.prepare(file);
-        FileSummary result = idempotency.execute(jwt, "POST", "/api/v1/files", key, prepared.fingerprint(),
+        FileSummary result = idempotency.executeFileUpload(jwt, "POST", "/api/v1/files", key, prepared.fingerprint(),
                 FileSummary.class, () -> service.authorizeUpload(jwt, requestId),
-                () -> service.upload(jwt, prepared, requestId), uploaded -> Long.parseLong(uploaded.id()));
+                () -> service.createPending(jwt, prepared, requestId),
+                fileId -> service.finishUpload(jwt, prepared, fileId, requestId));
         return ResponseEntity.created(URI.create("/api/v1/files/" + result.id()))
                 .body(ApiResponse.success("上传成功", result, requestId));
     }

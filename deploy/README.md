@@ -59,7 +59,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yml ps
 
 脚本会生成独立数据库账号。真实附件上传还必须在 `deploy/.env` 配置私有 OSS 的
 `OSS_REGION`、`OSS_ENDPOINT`、`OSS_BUCKET`、`OSS_ACCESS_KEY_ID` 和 `OSS_ACCESS_KEY_SECRET`。
-未配置时 Office 服务仍可启动，但文件上传和内容读取按契约返回 `503 DEPENDENCY_UNAVAILABLE`。
+未配置时 Office 服务仍可启动，但文件上传和内容读取按契约返回 `503 FILE_STORAGE_UNAVAILABLE`。
 
 ## 验收
 
@@ -71,12 +71,17 @@ python3 ./deploy/verify-phase3-api.py http://127.0.0.1/api/v1
 python3 ./deploy/verify-phase3-fix.py http://127.0.0.1/api/v1
 ./deploy/verify-phase3-infrastructure.sh
 ./deploy/verify-phase3-resilience.sh
+python3 ./deploy/verify-phase4-api.py
+./deploy/verify-phase4-infrastructure.sh
+./deploy/verify-phase4-resilience.sh
+./deploy/verify-phase4-file-resilience.sh
 ```
 
 脚本会依次检查六个容器、Flyway 与演示数据、Redis 往返、Kafka `acks=all` 写入及唯一消费组读取，以及经 Nginx 和网关完成登录、鉴权、员工越权拒绝和退出令牌失效。
 Python 验收会真实调用身份服务归属的 35 个公开操作，并覆盖部门领导 SQL 范围、普通员工越权、用户与部门写操作对象隐藏、幂等缓存命中前重新鉴权和资源清理。
 韧性验收会清空 Redis 并验证权限快照从 MySQL 回建；随后临时停止 Kafka，确认登录事实与 Outbox 保持成功，待 Kafka 恢复后事件变为 `SENT` 且可被真实消费。
 第三阶段修复验收会短暂暂停并自动恢复 `identity-service`，验证依赖响应超时返回标准 `503`、三个参数绑定异常返回 `400`，以及两个并发审批请求得到一个成功和一个 `409`。
+第四阶段文件韧性验收使用真实私有 OSS，验证上传记录先进入 `PENDING`、正常完成后进入 `AVAILABLE`，对象存储故障时保留 `DELETE_PENDING` 和重试信息，恢复后最终删除对象与数据库记录。
 
 若验收失败，先查看：
 

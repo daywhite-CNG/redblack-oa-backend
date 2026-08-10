@@ -38,7 +38,8 @@ public class InternalFileApplicationService {
         LocalDateTime now = now();
         for (Long fileId : fileIds) {
             FileEntity file = files.selectById(fileId);
-            if (file == null || !file.getOwnerId().equals(ownerId)) throw invalid();
+            if (file == null || !"AVAILABLE".equals(file.getStorageStatus())
+                    || !file.getOwnerId().equals(ownerId)) throw invalid();
             if ("BOUND".equals(file.getStatus())) {
                 if (businessId != null && businessType.equals(file.getBoundBusinessType())
                         && businessId.equals(file.getBoundBusinessId())) continue;
@@ -66,7 +67,8 @@ public class InternalFileApplicationService {
         }
         for (Long id : desired) {
             FileEntity file = files.selectById(id);
-            if (file == null || !file.getOwnerId().equals(ownerId)) throw invalid();
+            if (file == null || !"AVAILABLE".equals(file.getStorageStatus())
+                    || !file.getOwnerId().equals(ownerId)) throw invalid();
             if ("BOUND".equals(file.getStatus()) && businessType.equals(file.getBoundBusinessType())
                     && file.getBoundBusinessId() != null && businessId == file.getBoundBusinessId()) continue;
             if (files.confirmReservation(id, ownerId, reservationId, businessType, businessId, now) != 1) {
@@ -79,7 +81,7 @@ public class InternalFileApplicationService {
         if (fileIds == null || fileIds.size() > 10) throw invalid();
         return fileIds.stream().map(id -> {
             FileEntity file = files.selectById(id);
-            if (file == null) throw invalid();
+            if (file == null || !"AVAILABLE".equals(file.getStorageStatus())) throw invalid();
             FileStatus status = "BOUND".equals(file.getStatus()) ? FileStatus.BOUND : FileStatus.TEMPORARY;
             return new FileSummary(file.getId().toString(), file.getOriginalName(), file.getContentType(),
                     file.getSizeBytes(), status, file.getCreatedAt().atOffset(ZoneOffset.UTC));

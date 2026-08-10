@@ -1,5 +1,6 @@
 package com.redblack.office.application;
 
+import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.redblack.office.api.OfficeApiModels.FileSummary;
 import com.redblack.office.domain.FileEntity;
 import com.redblack.office.domain.NoticeEntity;
@@ -14,7 +15,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.file.Paths;
@@ -34,6 +34,8 @@ import java.util.UUID;
 @Service
 public class FileApplicationService {
     private static final long MAX_SIZE = 20L * 1024 * 1024;
+    private static final Duration TEMPORARY_TTL = Duration.ofHours(24);
+    private static final Duration CLEANUP_LEASE = Duration.ofMinutes(5);
     private static final Set<String> EXTENSIONS = Set.of("pdf", "jpg", "jpeg", "png", "doc", "docx", "xls", "xlsx");
     private static final Map<String, Set<String>> TYPES = Map.of(
             "pdf", Set.of("application/pdf"),
@@ -44,6 +46,7 @@ public class FileApplicationService {
             "xlsx", Set.of("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
 
     private final FileMapper files;
+    private final FileStorageTransactionService transactions;
     private final NoticeMapper notices;
     private final NoticeDepartmentMapper noticeDepartments;
     private final OfficeAuthorizationService authorization;
@@ -52,10 +55,12 @@ public class FileApplicationService {
     private final ApprovalClient approval;
     private final Clock clock;
 
-    public FileApplicationService(FileMapper files, NoticeMapper notices, NoticeDepartmentMapper noticeDepartments,
+    public FileApplicationService(FileMapper files, FileStorageTransactionService transactions,
+                                  NoticeMapper notices, NoticeDepartmentMapper noticeDepartments,
                                   OfficeAuthorizationService authorization, OssStorage storage,
                                   OssProperties properties, ApprovalClient approval, Clock clock) {
         this.files = files;
+        this.transactions = transactions;
         this.notices = notices;
         this.noticeDepartments = noticeDepartments;
         this.authorization = authorization;
@@ -75,7 +80,7 @@ public class FileApplicationService {
             String extension = extension(name);
             String contentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase(Locale.ROOT);
             if (!EXTENSIONS.contains(extension) || !TYPES.get(extension).contains(contentType)) {
-                throw new BusinessException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "UNSUPPORTED_FILE_TYPE", "不支持的文件类型");
+                throw new BusinessException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "FILE_TYPE_NOT_ALLOWED", "不支持的文件类型");
             }
             byte[] content = file.getBytes();
             if (!signature(extension, content)) {
@@ -92,15 +97,14 @@ public class FileApplicationService {
 
     public void authorizeUpload(Jwt jwt, String requestId) { authorization.requireActive(jwt, requestId); }
 
-    @Transactional
-    public FileSummary upload(Jwt jwt, PreparedUpload upload, String requestId) {
+    public long createPending(Jwt jwt, PreparedUpload upload, String requestId) {
         long ownerId = authorization.requireActive(jwt, requestId).id();
         LocalDateTime now = now();
         String prefix = properties.getPrefix() == null ? "redblack/v1/" : properties.getPrefix();
         if (!prefix.endsWith("/")) prefix += "/";
         String objectKey = prefix + LocalDate.now(clock) + "/" + ownerId + "/" + UUID.randomUUID() + "." + upload.extension();
-        String etag = storage.put(objectKey, upload.content(), upload.fingerprint().contentType());
         FileEntity entity = new FileEntity();
+        entity.setId(IdWorker.getId());
         entity.setOwnerId(ownerId);
         entity.setOriginalName(upload.fingerprint().fileName());
         entity.setContentType(upload.fingerprint().contentType());
@@ -110,54 +114,87 @@ public class FileApplicationService {
         entity.setObjectKey(objectKey);
         entity.setStorageProvider("ALIYUN_OSS");
         entity.setBucket(properties.getBucket());
-        entity.setEtag(etag);
-        entity.setStorageStatus("AVAILABLE");
+        entity.setStorageStatus("PENDING");
         entity.setCleanupAttempts(0);
+        entity.setCleanupNextAttemptAt(now.plus(TEMPORARY_TTL));
         entity.setStatus("TEMPORARY");
         entity.setCreatedAt(now);
         entity.setUpdatedAt(now);
-        try { files.insert(entity); }
-        catch (RuntimeException exception) { storage.delete(objectKey); throw exception; }
-        return summary(entity);
+        return transactions.createPending(entity);
+    }
+
+    public FileSummary finishUpload(Jwt jwt, PreparedUpload upload, long fileId, String requestId) {
+        long ownerId = authorization.requireActive(jwt, requestId).id();
+        FileEntity entity = require(fileId);
+        if (!entity.getOwnerId().equals(ownerId) || !matches(entity, upload)) {
+            throw new BusinessException(HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_REUSED",
+                    "同一幂等键不能用于不同文件");
+        }
+        if ("AVAILABLE".equals(entity.getStorageStatus())) return summary(entity);
+        if (!"PENDING".equals(entity.getStorageStatus())) throw BusinessException.notFound("文件不存在");
+        OssStorage.StoredMetadata remote = storage.metadata(entity.getBucket(), entity.getObjectKey());
+        String etag;
+        if (remote.exists()) {
+            if (remote.contentLength() != entity.getSizeBytes()) throw integrityMismatch();
+            OssStorage.StoredObject stored = storage.get(entity.getBucket(), entity.getObjectKey());
+            verifyIntegrity(entity, stored);
+            etag = stored.etag();
+        } else {
+            etag = storage.put(entity.getBucket(), entity.getObjectKey(), upload.content(), entity.getContentType());
+        }
+        transactions.markAvailable(fileId, etag, now());
+        return summary(requireAvailable(fileId));
     }
 
     public FileSummary metadata(Jwt jwt, long fileId, String requestId) {
         var actor = authorization.requireActive(jwt, requestId);
-        FileEntity entity = require(fileId);
+        FileEntity entity = requireAvailable(fileId);
         if (!canAccess(entity, actor, requestId)) throw BusinessException.notFound("文件不存在");
         return summary(entity);
     }
 
     public Download download(Jwt jwt, long fileId, String requestId) {
         var actor = authorization.requireActive(jwt, requestId);
-        FileEntity entity = require(fileId);
+        FileEntity entity = requireAvailable(fileId);
         if (!canAccess(entity, actor, requestId)) throw BusinessException.notFound("文件不存在");
-        return new Download(entity.getOriginalName(), entity.getContentType(), storage.get(entity.getObjectKey()));
+        OssStorage.StoredObject stored = storage.get(entity.getBucket(), entity.getObjectKey());
+        verifyIntegrity(entity, stored);
+        return new Download(entity.getOriginalName(), entity.getContentType(), stored.content());
     }
 
-    @Transactional
     public void deleteTemporary(Jwt jwt, long fileId, String requestId) {
         var actor = authorization.requireActive(jwt, requestId);
-        FileEntity entity = require(fileId);
+        FileEntity entity = requireAvailable(fileId);
         if (!entity.getOwnerId().equals(actor.id())) throw BusinessException.notFound("文件不存在");
         if (!"TEMPORARY".equals(entity.getStatus())) {
             throw new BusinessException(HttpStatus.CONFLICT, "FILE_ALREADY_BOUND", "已绑定文件不能删除");
         }
-        storage.delete(entity.getObjectKey());
-        if (files.deleteById(fileId) != 1) throw BusinessException.notFound("文件不存在");
+        LocalDateTime current = now();
+        if (!transactions.markDeletePending(fileId, actor.id(), current)) {
+            throw BusinessException.notFound("文件不存在");
+        }
+        entity = require(fileId);
+        try {
+            storage.delete(entity.getBucket(), entity.getObjectKey());
+        } catch (BusinessException exception) {
+            transactions.recordCleanupFailure(entity, current, exception.getMessage());
+            throw exception;
+        }
+        if (!transactions.delete(fileId, "DELETE_PENDING")) throw BusinessException.notFound("文件不存在");
     }
 
     @Scheduled(fixedDelayString = "${redblack.file.cleanup-delay:3600000}")
     public void cleanExpiredTemporary() {
         LocalDateTime current = now();
         files.releaseExpiredReservations(current);
-        LocalDateTime cutoff = current.minus(Duration.ofHours(24));
-        for (FileEntity entity : files.findExpiredTemporary(cutoff, 100)) {
+        LocalDateTime cutoff = current.minus(TEMPORARY_TTL);
+        for (FileEntity entity : transactions.claimCleanupBatch(
+                current, cutoff, current.plus(CLEANUP_LEASE), 100)) {
             try {
-                storage.delete(entity.getObjectKey());
-                files.deleteById(entity.getId());
-            } catch (BusinessException ignored) {
-                return;
+                storage.delete(entity.getBucket(), entity.getObjectKey());
+                transactions.delete(entity.getId(), entity.getStorageStatus());
+            } catch (RuntimeException exception) {
+                transactions.recordCleanupFailure(entity, current, exception.getMessage());
             }
         }
     }
@@ -181,6 +218,35 @@ public class FileApplicationService {
         FileEntity entity = files.selectById(id);
         if (entity == null) throw BusinessException.notFound("文件不存在");
         return entity;
+    }
+    private FileEntity requireAvailable(long id) {
+        FileEntity entity = require(id);
+        if (!"AVAILABLE".equals(entity.getStorageStatus())) throw BusinessException.notFound("文件不存在");
+        return entity;
+    }
+    private boolean matches(FileEntity entity, PreparedUpload upload) {
+        UploadFingerprint fingerprint = upload.fingerprint();
+        return entity.getOriginalName().equals(fingerprint.fileName())
+                && entity.getContentType().equals(fingerprint.contentType())
+                && entity.getSizeBytes() == fingerprint.size()
+                && entity.getSha256().equals(fingerprint.sha256());
+    }
+    private void verifyIntegrity(FileEntity entity, OssStorage.StoredObject stored) {
+        String actualSha = sha256(stored.content());
+        boolean etagMatches = entity.getEtag() == null || stored.etag() == null
+                || normalizeEtag(entity.getEtag()).equals(normalizeEtag(stored.etag()));
+        if (stored.content().length != entity.getSizeBytes() || !entity.getSha256().equals(actualSha) || !etagMatches) {
+            throw integrityMismatch();
+        }
+    }
+    private String sha256(byte[] content) {
+        try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content)); }
+        catch (Exception exception) { throw new IllegalStateException("SHA-256 unavailable", exception); }
+    }
+    private String normalizeEtag(String value) { return value.replace("\"", "").trim(); }
+    private BusinessException integrityMismatch() {
+        return new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "FILE_INTEGRITY_MISMATCH",
+                "文件完整性校验失败");
     }
     private FileSummary summary(FileEntity entity) {
         FileStatus status = "BOUND".equals(entity.getStatus()) ? FileStatus.BOUND : FileStatus.TEMPORARY;

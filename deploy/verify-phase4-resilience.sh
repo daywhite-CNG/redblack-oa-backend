@@ -9,6 +9,13 @@ TMP_DIR=$(mktemp -d)
 
 cleanup() {
   $COMPOSE start kafka >/dev/null 2>&1 || true
+  if [ -n "${notice_id:-}" ] && [ -n "${admin_token:-}" ] && [ -n "${published_version:-}" ]; then
+    curl -sS -o /dev/null -X POST -H 'Content-Type: application/json' \
+      -H "Authorization: Bearer $admin_token" \
+      -H "Idempotency-Key: $(cat /proc/sys/kernel/random/uuid)" \
+      -d "{\"version\":$published_version,\"reason\":\"韧性验收异常清理\"}" \
+      "$BASE_URL/notices/$notice_id/withdraw" || true
+  fi
   case "$TMP_DIR" in /tmp/*) rm -rf -- "$TMP_DIR" ;; esac
 }
 trap cleanup EXIT
@@ -90,7 +97,7 @@ event_id=${event_row%%|*}
 
 $COMPOSE start kafka >/dev/null
 kafka_container=$($COMPOSE ps -q kafka)
-for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+for _ in $(seq 1 40); do
   kafka_health=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$kafka_container")
   [ "$kafka_health" = "healthy" ] && break
   sleep 2
@@ -128,6 +135,8 @@ status=$(curl -sS -o "$TMP_DIR/response.json" -w '%{http_code}' -X POST \
   -d "{\"version\":$published_version,\"reason\":\"韧性验收完成后撤回\"}" \
   "$BASE_URL/notices/$notice_id/withdraw")
 assert_status 200 "$status" "withdraw resilience notice"
+verified_notice_id=$notice_id
+notice_id=""
 
 pending=""
 for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
@@ -137,4 +146,4 @@ for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
 done
 [ "$pending" = "0" ] || { echo "Office Outbox still has $pending pending events"; exit 1; }
 
-echo "PHASE4_RESILIENCE_OK notice=$notice_id event=$event_id redis=rebuilt outbox=SENT kafka=roundtrip"
+echo "PHASE4_RESILIENCE_OK notice=$verified_notice_id event=$event_id redis=rebuilt outbox=SENT kafka=roundtrip"

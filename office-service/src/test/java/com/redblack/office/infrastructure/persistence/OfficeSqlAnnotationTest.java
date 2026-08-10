@@ -28,6 +28,19 @@ class OfficeSqlAnnotationTest {
         }
     }
 
+    @Test
+    void fileStateTransitionsAreAtomicAndCleanupUsesLockedBatches() throws Exception {
+        assertThat(sql(FileMapper.class.getDeclaredMethod("reserve", long.class, long.class,
+                String.class, java.time.LocalDateTime.class, java.time.LocalDateTime.class)))
+                .contains("storage_status='AVAILABLE'");
+        assertThat(sql(FileMapper.class.getDeclaredMethod("confirmReservation", long.class, long.class,
+                String.class, String.class, long.class, java.time.LocalDateTime.class)))
+                .contains("storage_status='AVAILABLE'");
+        assertThat(sql(FileMapper.class.getDeclaredMethod("findCleanupCandidatesForUpdate",
+                java.time.LocalDateTime.class, java.time.LocalDateTime.class, int.class)))
+                .contains("FOR UPDATE SKIP LOCKED", "cleanup_next_attempt_at <= #{now}");
+    }
+
     private String sql(Method method) {
         Select select = method.getAnnotation(Select.class);
         if (select != null) return String.join(" ", select.value());

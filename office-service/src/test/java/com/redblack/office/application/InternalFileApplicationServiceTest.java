@@ -50,11 +50,22 @@ class InternalFileApplicationServiceTest {
                 "LEAVE_APPLICATION", 90001L));
     }
 
+    @Test
+    void rejectsPendingFileBeforeBinding() {
+        FileEntity file = temporaryFile();
+        file.setStorageStatus("PENDING");
+        when(files.selectById(1L)).thenReturn(file);
+
+        assertBindingInvalid(() -> service.reserve("reservation-a", 10003L, List.of(1L),
+                "LEAVE_APPLICATION", null));
+    }
+
     private FileEntity temporaryFile() {
         FileEntity file = new FileEntity();
         file.setId(1L);
         file.setOwnerId(10003L);
         file.setStatus("TEMPORARY");
+        file.setStorageStatus("AVAILABLE");
         return file;
     }
 
