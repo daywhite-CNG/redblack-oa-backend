@@ -6,5 +6,6 @@ target/
 .env.*
 !.env.example
 deploy/secrets/
+deploy/frontend/
 deploy/KafkaRoundTripProbe.jar
 

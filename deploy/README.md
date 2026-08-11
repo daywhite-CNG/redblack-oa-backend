@@ -7,6 +7,7 @@
 - Docker Engine 与 Docker Compose 插件可用。
 - `openssl`、`curl`、`python3` 可用。
 - 项目已使用 Java 21 执行 `./mvnw -B -ntp clean verify` 并生成网关、身份服务 JAR。
+- 前端已使用 `npm.cmd run build` 生成 `dist/`；部署时将其复制到 `deploy/frontend/`。Nginx 同时提供静态页面、`/health` 和 `/api/v1`，浏览器始终经同源 `/api/v1` 调用网关。
 - 已从 `deploy/KafkaRoundTripProbe.java` 编译生成 `deploy/KafkaRoundTripProbe.jar`；验收会复用现有 identity-service 镜像中的 Kafka 客户端依赖，不下载额外镜像。
 - 已准备 `edenhill/kcat:1.7.1` 镜像，仅供韧性脚本确认指定 Outbox 事件被真实消费；验收过程不自动下载镜像。
 
@@ -32,6 +33,7 @@ jar --create --file deploy/KafkaRoundTripProbe.jar -C deploy/.probe-build .
 git rev-parse HEAD
 sha256sum gateway-service/target/*.jar identity-service/target/*.jar \
   approval-service/target/*.jar office-service/target/*.jar audit-service/target/*.jar
+find deploy/frontend -type f -print0 | sort -z | xargs -0 sha256sum
 docker compose --env-file deploy/.env -f deploy/docker-compose.yml config --quiet
 ```
 
