@@ -258,7 +258,7 @@ public class UserApplicationService {
                 .eq(status != null, UserEntity::getStatus, status)
                 .orderByAsc(UserEntity::getName)
                 .last("LIMIT " + Math.min(Math.max(limit, 1), 100));
-        applyScope(query, snapshot);
+        applyOptionScope(query, snapshot);
         return userMapper.selectList(query).stream().map(assembler::ref).toList();
     }
 
@@ -299,6 +299,21 @@ public class UserApplicationService {
                 }
             });
         }
+    }
+
+    private void applyOptionScope(LambdaQueryWrapper<UserEntity> query, AuthorizationSnapshot snapshot) {
+        boolean selfOnly = snapshot.grants().stream().anyMatch(grant -> grant.scope() == DataScope.SELF)
+                && snapshot.grants().stream().noneMatch(grant -> grant.scope() != DataScope.SELF);
+        if (!selfOnly) {
+            applyScope(query, snapshot);
+            return;
+        }
+        UserEntity currentUser = userMapper.selectById(parseId(snapshot.userId()));
+        if (currentUser == null || currentUser.getDepartmentId() == null) {
+            query.eq(UserEntity::getId, -1L);
+            return;
+        }
+        query.eq(UserEntity::getDepartmentId, currentUser.getDepartmentId());
     }
 
     private void requireVisible(AuthorizationSnapshot snapshot, UserEntity user) {

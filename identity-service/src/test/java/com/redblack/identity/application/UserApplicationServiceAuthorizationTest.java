@@ -24,9 +24,10 @@ class UserApplicationServiceAuthorizationTest {
     private final UserMapper users = mock(UserMapper.class);
     private final DepartmentMapper departments = mock(DepartmentMapper.class);
     private final AuthorizationSnapshotService authorization = mock(AuthorizationSnapshotService.class);
+    private final IdentityViewAssembler assembler = mock(IdentityViewAssembler.class);
     private final UserApplicationService service = new UserApplicationService(
             users, departments, mock(RoleMapper.class), mock(AssignmentMapper.class), mock(PasswordEncoder.class),
-            authorization, mock(IdentityViewAssembler.class), mock(OutboxService.class), Clock.systemUTC());
+            authorization, assembler, mock(OutboxService.class), Clock.systemUTC());
     private final Jwt jwt = Jwt.withTokenValue("token").header("alg", "RS256").subject("10001").build();
 
     @BeforeEach
@@ -68,6 +69,29 @@ class UserApplicationServiceAuthorizationTest {
 
         verify(users, never()).updateById(any(UserEntity.class));
         verify(users, never()).deleteById(anyLong());
+    }
+
+    @Test
+    void optionsExposeSameDepartmentPeersToSelfScopedEmployee() {
+        AuthorizationSnapshot snapshot = new AuthorizationSnapshot("10001", EnabledStatus.ENABLED, 1,
+                List.of(), List.of(), List.of(new AuthorizationGrant(DataScope.SELF, List.of())),
+                1, OffsetDateTime.now().plusMinutes(5));
+        UserEntity current = new UserEntity();
+        current.setId(10001L);
+        current.setDepartmentId(20002L);
+        UserEntity colleague = new UserEntity();
+        colleague.setId(10002L);
+        colleague.setDepartmentId(20002L);
+        when(authorization.requireActive(same(jwt))).thenReturn(snapshot);
+        when(users.selectById(10001L)).thenReturn(current);
+        when(users.selectList(any())).thenReturn(List.of(colleague));
+        UserRef expected = new UserRef("10002", "同部门同事", "20002");
+        when(assembler.ref(colleague)).thenReturn(expected);
+
+        assertThat(service.options(jwt, null, null, EnabledStatus.ENABLED, 20)).containsExactly(expected);
+
+        verify(users).selectById(10001L);
+        verify(users).selectList(any());
     }
 
     private void assertHidden(Runnable operation) {
