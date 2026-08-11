@@ -2,12 +2,15 @@ package com.redblack.office.infrastructure.oss;
 
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.OSSClientBuilder;
+import com.aliyun.oss.model.OSSObject;
 import com.aliyun.oss.model.ObjectMetadata;
 import com.redblack.office.application.BusinessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 
 @Component
 public class OssStorage {
@@ -32,6 +35,23 @@ public class OssStorage {
                 return new StoredObject(stream.readAllBytes(), object.getObjectMetadata().getETag());
             }
         });
+    }
+
+    public StoredStream open(String bucket, String objectKey) {
+        if (!properties.configured()) throw unavailable();
+        OSS client = null;
+        try {
+            client = new OSSClientBuilder().build(properties.getEndpoint(),
+                    properties.getAccessKeyId(), properties.getAccessKeySecret());
+            OSSObject object = client.getObject(bucket(bucket), objectKey);
+            return new StoredStream(object.getObjectContent(), object.getObjectMetadata().getETag(), client);
+        } catch (BusinessException exception) {
+            if (client != null) client.shutdown();
+            throw exception;
+        } catch (Exception exception) {
+            if (client != null) client.shutdown();
+            throw unavailable();
+        }
     }
 
     public StoredMetadata metadata(String bucket, String objectKey) {
@@ -73,6 +93,30 @@ public class OssStorage {
 
     public record StoredObject(byte[] content, String etag) { }
     public record StoredMetadata(boolean exists, String etag, long contentLength) { }
+
+    public static final class StoredStream implements AutoCloseable {
+        private final InputStream content;
+        private final String etag;
+        private final OSS client;
+
+        public StoredStream(InputStream content, String etag, OSS client) {
+            this.content = content;
+            this.etag = etag;
+            this.client = client;
+        }
+
+        public InputStream content() { return content; }
+        public String etag() { return etag; }
+
+        @Override
+        public void close() throws IOException {
+            try {
+                content.close();
+            } finally {
+                if (client != null) client.shutdown();
+            }
+        }
+    }
 
     @FunctionalInterface
     private interface Operation<T> { T run(OSS client) throws Exception; }

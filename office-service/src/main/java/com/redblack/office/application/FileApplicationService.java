@@ -157,9 +157,20 @@ public class FileApplicationService {
         var actor = authorization.requireActive(jwt, requestId);
         FileEntity entity = requireAvailable(fileId);
         if (!canAccess(entity, actor, requestId)) throw BusinessException.notFound("文件不存在");
-        OssStorage.StoredObject stored = storage.get(entity.getBucket(), entity.getObjectKey());
-        verifyIntegrity(entity, stored);
-        return new Download(entity.getOriginalName(), entity.getContentType(), stored.content());
+        OssStorage.StoredObject verified = storage.get(entity.getBucket(), entity.getObjectKey());
+        verifyIntegrity(entity, verified);
+        OssStorage.StoredStream stream = storage.open(entity.getBucket(), entity.getObjectKey());
+        try {
+            verifyEtag(entity, stream.etag());
+            return new Download(entity.getOriginalName(), entity.getContentType(), entity.getSizeBytes(), stream);
+        } catch (RuntimeException exception) {
+            try {
+                stream.close();
+            } catch (Exception ignored) {
+                // Preserve the integrity error; closing a failed OSS stream cannot make the response valid.
+            }
+            throw exception;
+        }
     }
 
     public void deleteTemporary(Jwt jwt, long fileId, String requestId) {
@@ -233,11 +244,15 @@ public class FileApplicationService {
     }
     private void verifyIntegrity(FileEntity entity, OssStorage.StoredObject stored) {
         String actualSha = sha256(stored.content());
-        boolean etagMatches = entity.getEtag() == null || stored.etag() == null
-                || normalizeEtag(entity.getEtag()).equals(normalizeEtag(stored.etag()));
-        if (stored.content().length != entity.getSizeBytes() || !entity.getSha256().equals(actualSha) || !etagMatches) {
+        if (stored.content().length != entity.getSizeBytes() || !entity.getSha256().equals(actualSha)) {
             throw integrityMismatch();
         }
+        verifyEtag(entity, stored.etag());
+    }
+    private void verifyEtag(FileEntity entity, String actualEtag) {
+        boolean etagMatches = entity.getEtag() == null || actualEtag == null
+                || normalizeEtag(entity.getEtag()).equals(normalizeEtag(actualEtag));
+        if (!etagMatches) throw integrityMismatch();
     }
     private String sha256(byte[] content) {
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content)); }
@@ -282,5 +297,5 @@ public class FileApplicationService {
 
     public record UploadFingerprint(String fileName, String contentType, long size, String sha256) { }
     public record PreparedUpload(UploadFingerprint fingerprint, String extension, byte[] content) { }
-    public record Download(String fileName, String contentType, byte[] content) { }
+    public record Download(String fileName, String contentType, long contentLength, OssStorage.StoredStream stream) { }
 }

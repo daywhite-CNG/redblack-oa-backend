@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -89,15 +90,19 @@ public class FileController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "资源不存在"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "依赖不可用")
     })
-    ResponseEntity<byte[]> download(@AuthenticationPrincipal Jwt jwt, @PathVariable long fileId,
-                                    HttpServletRequest request) {
+    ResponseEntity<StreamingResponseBody> download(@AuthenticationPrincipal Jwt jwt, @PathVariable long fileId,
+                                                    HttpServletRequest request) {
         var result = service.download(jwt, fileId, RequestIds.get(request));
         ContentDisposition disposition = ContentDisposition.attachment()
                 .filename(result.fileName(), StandardCharsets.UTF_8).build();
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                 .contentType(MediaType.parseMediaType(result.contentType()))
-                .contentLength(result.content().length)
-                .body(result.content());
+                .contentLength(result.contentLength())
+                .body(output -> {
+                    try (var stream = result.stream()) {
+                        stream.content().transferTo(output);
+                    }
+                });
     }
 }

@@ -16,6 +16,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.io.ByteArrayInputStream;
 import java.util.HexFormat;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -121,6 +122,27 @@ class FileApplicationServiceTest {
         assertThatThrownBy(() -> service.download(jwt, 90001L, "request-1"))
                 .isInstanceOfSatisfying(BusinessException.class,
                         exception -> assertThat(exception.code()).isEqualTo("FILE_INTEGRITY_MISMATCH"));
+    }
+
+    @Test
+    void verifiesThenReturnsANewStreamForDownload() throws Exception {
+        FileEntity entity = pendingFile();
+        entity.setStorageStatus("AVAILABLE");
+        entity.setEtag("etag-123");
+        when(files.selectById(90001L)).thenReturn(entity);
+        when(storage.get("redblack-private", "redblack/v1/file.png"))
+                .thenReturn(new OssStorage.StoredObject(CONTENT, "etag-123"));
+        when(storage.open("redblack-private", "redblack/v1/file.png"))
+                .thenReturn(new OssStorage.StoredStream(new ByteArrayInputStream(CONTENT), "etag-123", null));
+
+        var download = service.download(jwt, 90001L, "request-1");
+
+        assertThat(download.contentLength()).isEqualTo(CONTENT.length);
+        try (var stream = download.stream()) {
+            assertThat(stream.content().readAllBytes()).isEqualTo(CONTENT);
+        }
+        verify(storage).get("redblack-private", "redblack/v1/file.png");
+        verify(storage).open("redblack-private", "redblack/v1/file.png");
     }
 
     @Test
