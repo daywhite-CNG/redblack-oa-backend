@@ -34,7 +34,7 @@ git rev-parse HEAD
 sha256sum gateway-service/target/*.jar identity-service/target/*.jar \
   approval-service/target/*.jar office-service/target/*.jar audit-service/target/*.jar
 find deploy/frontend -type f -print0 | sort -z | xargs -0 sha256sum
-docker compose --env-file deploy/.env -f deploy/docker-compose.yml config --quiet
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml config >/dev/null
 ```
 
 既有数据卷升级前，先确认待执行的 Flyway 迁移版本只向前新增；审批库与第四阶段办公/审计库分别按下文的准备脚本执行。部署后重新记录容器镜像 ID、Flyway 结果、健康接口和同一批 JAR 的 SHA-256。仅“文件已复制”不能证明运行来源或迁移成功。
@@ -47,7 +47,7 @@ cp deploy/.env.example deploy/.env
 
 ```bash
 sudo ./deploy/prepare-secrets.sh
-docker compose --env-file deploy/.env -f deploy/docker-compose.yml config --quiet
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml config >/dev/null
 docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build
 docker compose --env-file deploy/.env -f deploy/docker-compose.yml ps
 ```
