@@ -24,6 +24,19 @@ jar --create --file deploy/KafkaRoundTripProbe.jar -C deploy/.probe-build .
 
 ## 首次部署
 
+### 部署来源与升级前核验
+
+在复制或构建任何产物前，先记录本轮已验证的提交与产物摘要，并检查 Compose 配置：
+
+```bash
+git rev-parse HEAD
+sha256sum gateway-service/target/*.jar identity-service/target/*.jar \
+  approval-service/target/*.jar office-service/target/*.jar audit-service/target/*.jar
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml config --quiet
+```
+
+既有数据卷升级前，先确认待执行的 Flyway 迁移版本只向前新增；审批库与第四阶段办公/审计库分别按下文的准备脚本执行。部署后重新记录容器镜像 ID、Flyway 结果、健康接口和同一批 JAR 的 SHA-256。仅“文件已复制”不能证明运行来源或迁移成功。
+
 ```bash
 cp deploy/.env.example deploy/.env
 ```
@@ -81,7 +94,7 @@ python3 ./deploy/verify-phase4-api.py
 Python 验收会真实调用身份服务归属的 35 个公开操作，并覆盖部门领导 SQL 范围、普通员工越权、用户与部门写操作对象隐藏、幂等缓存命中前重新鉴权和资源清理。
 韧性验收会清空 Redis 并验证权限快照从 MySQL 回建；随后临时停止 Kafka，确认登录事实与 Outbox 保持成功，待 Kafka 恢复后事件变为 `SENT` 且可被真实消费。
 第三阶段修复验收会短暂暂停并自动恢复 `identity-service`，验证依赖响应超时返回标准 `503`、三个参数绑定异常返回 `400`，以及两个并发审批请求得到一个成功和一个 `409`。
-第四阶段文件韧性验收使用真实私有 OSS，验证上传记录先进入 `PENDING`、正常完成后进入 `AVAILABLE`，对象存储故障时保留 `DELETE_PENDING` 和重试信息，恢复后最终删除对象与数据库记录。
+第四阶段文件韧性验收使用真实私有 OSS，验证上传记录先进入 `PENDING`、正常完成后进入 `AVAILABLE`，对象存储故障时保留 `DELETE_PENDING` 和重试信息，恢复后最终删除对象与数据库记录。下载会先完整读取并校验长度、SHA-256 与保存的 ETag，再重新打开对象流返回；任何校验失败都必须返回完整性错误，不能输出部分内容。
 
 若验收失败，先查看：
 
