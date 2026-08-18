@@ -17,6 +17,7 @@ import com.redblack.office.infrastructure.persistence.FileMapper;
 import com.redblack.office.infrastructure.persistence.NoticeDepartmentMapper;
 import com.redblack.office.infrastructure.persistence.NoticeMapper;
 import com.redblack.office.infrastructure.persistence.NoticeReadMapper;
+import com.redblack.office.infrastructure.persistence.NotificationMapper;
 import org.jsoup.Jsoup;
 import org.jsoup.safety.Safelist;
 import org.springframework.http.HttpStatus;
@@ -35,17 +36,19 @@ public class NoticeApplicationService {
     private final NoticeMapper notices;
     private final NoticeDepartmentMapper departments;
     private final NoticeReadMapper reads;
+    private final NotificationMapper notifications;
     private final FileMapper files;
     private final OfficeAuthorizationService authorization;
     private final OfficeOutboxService outbox;
     private final Clock clock;
 
     public NoticeApplicationService(NoticeMapper notices, NoticeDepartmentMapper departments,
-                                    NoticeReadMapper reads, FileMapper files,
+                                    NoticeReadMapper reads, NotificationMapper notifications, FileMapper files,
                                     OfficeAuthorizationService authorization, OfficeOutboxService outbox, Clock clock) {
         this.notices = notices;
         this.departments = departments;
         this.reads = reads;
+        this.notifications = notifications;
         this.files = files;
         this.authorization = authorization;
         this.outbox = outbox;
@@ -206,7 +209,9 @@ public class NoticeApplicationService {
         var actor = authorization.require(jwt, "notice:read", requestId);
         NoticeEntity entity = require(noticeId);
         if (!visible(entity, actor.departmentId())) throw BusinessException.notFound("公告不存在");
-        if (reads.markRead(noticeId, actor.id(), now()) == 1) notices.incrementReadCount(noticeId);
+        LocalDateTime readAt = now();
+        if (reads.markRead(noticeId, actor.id(), readAt) == 1) notices.incrementReadCount(noticeId);
+        notifications.markNoticeRead(noticeId, actor.id(), readAt);
     }
 
     private void apply(NoticeEntity entity, String title, String summary, String content, NoticeType type,

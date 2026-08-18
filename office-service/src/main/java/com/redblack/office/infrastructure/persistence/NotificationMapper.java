@@ -35,6 +35,8 @@ public interface NotificationMapper extends BaseMapper<NotificationEntity> {
     int markRead(@Param("id") long id, @Param("userId") long userId, @Param("readAt") LocalDateTime readAt);
     @Update("UPDATE office_notification SET is_read=TRUE,read_at=#{readAt} WHERE recipient_id=#{userId} AND is_read=FALSE")
     int markAllRead(@Param("userId") long userId, @Param("readAt") LocalDateTime readAt);
+    @Update("UPDATE office_notification SET is_read=TRUE,read_at=#{readAt} WHERE recipient_id=#{userId} AND business_type='NOTICE' AND business_id=#{noticeId} AND is_read=FALSE")
+    int markNoticeRead(@Param("noticeId") long noticeId, @Param("userId") long userId, @Param("readAt") LocalDateTime readAt);
     @Select("SELECT COUNT(*) FROM office_notification WHERE recipient_id=#{userId} AND is_read=FALSE")
     long unreadCount(@Param("userId") long userId);
 }
