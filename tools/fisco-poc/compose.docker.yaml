@@ -1,0 +1,74 @@
+# 四节点均使用同一个官方 3.7.3 二进制封装，节点身份与数据只在宿主 bind mount。
+x-fisco-common: &fisco-common
+  image: redblack/fisco-bcos:3.7.3-poc
+  build:
+    context: .
+    dockerfile: Dockerfile
+  working_dir: /data
+  command: ["-c", "config.ini", "-g", "config.genesis"]
+  restart: unless-stopped
+  healthcheck:
+    test: ["CMD-SHELL", "ss -lnt | grep -q ':20200 ' && ss -lnt | grep -q ':30300 '"]
+    interval: 10s
+    timeout: 5s
+    retries: 12
+    start_period: 30s
+
+services:
+  node0:
+    <<: *fisco-common
+    ports:
+      - "127.0.0.1:20200:20200"
+    networks:
+      chain:
+        ipv4_address: 172.29.44.10
+    volumes:
+      - ./docker-runtime/nodes/172.29.44.10/node0/config.ini:/data/config.ini:ro
+      - ./docker-runtime/nodes/172.29.44.10/node0/config.genesis:/data/config.genesis:ro
+      - ./docker-runtime/nodes/172.29.44.10/node0/nodes.json:/data/nodes.json:ro
+      - ./docker-runtime/nodes/172.29.44.10/node0/conf:/data/conf:ro
+      - ./docker-runtime/nodes/172.29.44.10/node0/data:/data/data
+      - ./docker-runtime/nodes/172.29.44.10/node0/log:/data/log
+  node1:
+    <<: *fisco-common
+    networks:
+      chain:
+        ipv4_address: 172.29.44.11
+    volumes:
+      - ./docker-runtime/nodes/172.29.44.11/node0/config.ini:/data/config.ini:ro
+      - ./docker-runtime/nodes/172.29.44.11/node0/config.genesis:/data/config.genesis:ro
+      - ./docker-runtime/nodes/172.29.44.11/node0/nodes.json:/data/nodes.json:ro
+      - ./docker-runtime/nodes/172.29.44.11/node0/conf:/data/conf:ro
+      - ./docker-runtime/nodes/172.29.44.11/node0/data:/data/data
+      - ./docker-runtime/nodes/172.29.44.11/node0/log:/data/log
+  node2:
+    <<: *fisco-common
+    networks:
+      chain:
+        ipv4_address: 172.29.44.12
+    volumes:
+      - ./docker-runtime/nodes/172.29.44.12/node0/config.ini:/data/config.ini:ro
+      - ./docker-runtime/nodes/172.29.44.12/node0/config.genesis:/data/config.genesis:ro
+      - ./docker-runtime/nodes/172.29.44.12/node0/nodes.json:/data/nodes.json:ro
+      - ./docker-runtime/nodes/172.29.44.12/node0/conf:/data/conf:ro
+      - ./docker-runtime/nodes/172.29.44.12/node0/data:/data/data
+      - ./docker-runtime/nodes/172.29.44.12/node0/log:/data/log
+  node3:
+    <<: *fisco-common
+    networks:
+      chain:
+        ipv4_address: 172.29.44.13
+    volumes:
+      - ./docker-runtime/nodes/172.29.44.13/node0/config.ini:/data/config.ini:ro
+      - ./docker-runtime/nodes/172.29.44.13/node0/config.genesis:/data/config.genesis:ro
+      - ./docker-runtime/nodes/172.29.44.13/node0/nodes.json:/data/nodes.json:ro
+      - ./docker-runtime/nodes/172.29.44.13/node0/conf:/data/conf:ro
+      - ./docker-runtime/nodes/172.29.44.13/node0/data:/data/data
+      - ./docker-runtime/nodes/172.29.44.13/node0/log:/data/log
+
+networks:
+  chain:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.29.44.0/24

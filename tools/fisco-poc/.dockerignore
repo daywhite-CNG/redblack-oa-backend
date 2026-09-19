@@ -1,0 +1,5 @@
+**
+!Dockerfile
+!docker-runtime/
+!docker-runtime/image/
+!docker-runtime/image/fisco-bcos

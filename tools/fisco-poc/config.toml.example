@@ -1,0 +1,9 @@
+[cryptoMaterial]
+certPath = "conf"
+useSMCrypto = "false"
+enableSsl = "true"
+
+[network]
+messageTimeout = "10000"
+defaultGroup = "group0"
+peers = ["127.0.0.1:20200"]
