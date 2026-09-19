@@ -1,47 +1,165 @@
 # Red&Black OA Backend
 
-Red&Black OA V1 后端，严格遵循当前 PRD、权限设计、HTTP/OpenAPI 与事件契约。
+《基于联盟链的小型企业 OA 协同办公系统设计与实现》的后端工程。
 
-## 模块
+本项目以请假审批为业务载体，保留身份、RBAC、办公、审计和异步事件能力，并规划新增独立联盟链证据服务，实现审批关键事实的可信存证、追溯、验真和故障恢复。
 
-- `gateway-service`：统一入口、路由、身份前置检查和限流边界。
-- `identity-service`：登录、用户、部门、角色、菜单与权限事实源。
-- `approval-service`：请假申请、审批任务、审批记录与状态机。
-- `office-service`：工作台读模型、公告、通知和 OSS 附件访问。
-- `audit-service`：消费审计事件并提供操作日志查询。
-- `redblack-common`：仅存放稳定的技术契约，不共享业务实体或 Mapper。
+> 当前状态说明：仓库现有代码已经包含 OA 微服务、Outbox/Inbox、Kafka、OSS 与测试材料，但尚未包含 `blockchain-service`、联盟链节点或智能合约实现。文档中的联盟链部分是毕业设计 V2 开发基线，不代表已经完成或验证。
 
-## 当前阶段
+## 项目目录
 
-第二阶段“身份、组织与 RBAC 闭环”已进入本地实现：
+```text
+redblack-oa-backend/
+├── gateway-service/       # 网关、认证前置检查和路由
+├── identity-service/      # 登录、用户、部门、角色、菜单和权限事实源
+├── approval-service/      # 请假申请、审批任务、记录和业务状态机
+├── office-service/        # 工作台、公告、通知和 OSS 附件
+├── audit-service/         # 操作日志消费、存储和查询
+├── redblack-common/       # 稳定技术契约，不共享业务实体
+├── contracts/             # 当前 OpenAPI；后续增加智能合约源码和部署产物
+├── deploy/                # 本地/虚拟机部署与验收脚本
+├── docs/                  # 当前产品、权限和接口基线
+└── evidence/              # 历史执行证据，不代替当前验证
+```
 
-- `identity-service` 提供 OpenAPI 约定的 35 个认证、账号、用户、部门、角色和菜单操作，以及 3 个内部身份查询。
-- MySQL Flyway 迁移包含身份/RBAC、演示数据、Outbox 和幂等记录；业务时间按 UTC 处理。
-- 用户令牌使用 RS256，内部服务令牌使用最长 5 分钟的 HS256；私钥和共享密钥不进入仓库。
-- Redis 权限快照默认 5 分钟，身份或授权变化在事务提交后失效；Redis 未命中时回源 MySQL。
-- 身份事实与 Outbox 在同一事务提交，发布失败按有上限的指数退避重试。
-- 网关移除外部伪造身份头，验证用户令牌、注销标记和 `authVersion`，权限缓存未命中时回源身份服务。
+目标阶段将新增：
 
-审批、办公、审计服务仍保持拒绝未实现接口的安全默认值。MySQL 8.4、Redis、Kafka 的 Testcontainers 验收需要本机 Docker 或后续集成环境；编译和单元/契约测试通过不等同于虚拟机最终验收。
+```text
+├── blockchain-service/    # 证据消费、规范化、SDK、回执、验真和补偿
+└── contracts/solidity/    # ApprovalEvidenceRegistry 等智能合约
+```
+
+## 产品边界
+
+### OA 业务
+
+- 用户、部门、角色、菜单和数据权限。
+- 请假草稿、提交、撤回、重新提交、同意、驳回和转交。
+- 工作台、公告、通知、附件和操作日志。
+- MySQL、Redis、Kafka Outbox/Inbox 与 OSS 文件完整性。
+
+### 联盟链主线
+
+- 对 `SUBMIT`、`RESUBMIT`、`APPROVE`、`REJECT`、`TRANSFER`、`WITHDRAW` 形成证据。
+- 使用版本化规范负载、SHA-256、附件哈希根和前序证据哈希。
+- 通过智能合约完成证据唯一性、联盟组织权限和状态迁移校验。
+- 保存交易哈希、区块高度、合约地址和确认时间。
+- 支持链上链下验真、重复事件幂等、回执未知恢复和链中断补偿。
+
+系统不将附件原文、姓名、请假原因或审批意见明文上链，也不为每个 OA 用户托管链私钥。
+
+## 当前与目标状态
+
+| 能力 | 当前源码状态 | V2 目标 |
+|---|---|---|
+| 身份与 RBAC | 已有源码和迁移 | 保持并增加联盟链权限 |
+| 请假审批 | 已有源码和状态机 | 增加专用证据事件 |
+| Kafka Outbox/Inbox | 已有实现 | 新增链服务独立消费者组和 Inbox |
+| 附件 SHA-256 | 已有 | 增加不可变附件证据快照契约 |
+| 操作日志 | 已有 | 保持传统审计，不作为链事实源 |
+| `blockchain-service` | 未实现 | 新增独立服务和数据库 |
+| 智能合约 | 未实现 | 新增 `ApprovalEvidenceRegistry` |
+| 联盟链网络 | 未部署 | 两组织、多节点实验拓扑 |
+| 验真与故障实验 | 未实现 | 作为毕设验收重点 |
+
+## 目标架构
+
+```text
+Browser
+  │
+  ▼
+gateway-service
+  ├── identity-service
+  ├── approval-service ── Outbox ── Kafka ── blockchain-service ── 联盟链
+  ├── office-service                           │
+  └── audit-service                            └── redblack_blockchain
+
+office-service ── 附件 SHA-256 / 不可变快照 ──┘
+```
+
+建议逻辑联盟组织：
+
+- `OrgEnterprise`：企业组织，提交审批证据。
+- `OrgAudit`：审计组织，参与共识和独立验证。
+
+如果所有节点运行在同一台 VM，论文和文档必须称为“多组织仿真联盟链”；只有组织节点分别部署在不同主机时，才描述为跨主机实验网络。
+
+## 技术基线
+
+- Java 21（根 POM 强制约束）
+- Spring Boot 3.5.x
+- Maven Wrapper
+- MySQL、Redis、Kafka
+- Flyway
+- Docker Compose / 虚拟机实验环境
+- 阿里云 OSS 或兼容对象存储
+- 联盟链候选：FISCO BCOS 3.x、PBFT 类共识、Solidity
+
+FISCO BCOS 和 Java SDK 的确切版本必须先完成 Java 21 兼容性 POC，未验证前不得写成项目既成事实。
 
 ## 构建
 
-需要 Java 21 和 Maven 3.9+：
+准备 Java 21 后，在仓库根目录运行：
 
 ```powershell
 ./mvnw.cmd clean verify
 ```
 
-运行网关和身份服务还必须通过 Secret/环境提供：
+该命令只验证当前源码能够完成的构建和测试；在区块链模块实现前，不代表联盟链功能通过。
 
-- `JWT_PUBLIC_KEY_PATH`：两个服务读取的 X.509 RSA 公钥路径。
-- `JWT_PRIVATE_KEY_PATH`：仅身份服务读取的 PKCS#8 RSA 私钥路径。
-- `INTERNAL_SERVICE_TOKEN_SECRET`：至少 32 字符的内部服务令牌密钥。
-- `IDENTITY_DB_USERNAME`、`IDENTITY_DB_PASSWORD`：身份库凭据。
+## 配置与密钥
 
-默认 JWT 发行者为 `https://identity.redblack.local`，访问令牌受众为 `redblack-oa`，有效期固定为 8 小时。
+现有服务所需凭据以环境变量或只读 Secret 提供，例如：
 
-## 契约
+- `JWT_PUBLIC_KEY_PATH`
+- `JWT_PRIVATE_KEY_PATH`
+- `INTERNAL_SERVICE_TOKEN_SECRET`
+- 各服务独立数据库账号和密码
+- OSS 访问凭据
 
-浏览器 HTTP 契约快照位于 `contracts/openapi/redblack-oa-v1.openapi.yaml`。项目来源中的最新文档始终优先；契约不一致时暂停实现并先完成评审。
+区块链阶段还需要：
+
+- 链网关/节点连接配置
+- SDK 证书目录
+- 组织交易账户私钥
+- `redblack_blockchain` 独立数据库凭据
+- 合约地址和版本清单
+
+禁止将 JWT 私钥、服务密钥、数据库密码、OSS 密钥、链私钥或证书正文提交到 Git。
+
+## 文档
+
+- [产品需求文档](docs/产品需求文档.md)：产品范围、领域模型、联盟链能力和验收。
+- [权限设计](docs/权限设计.md)：角色、权限、数据范围和服务责任。
+- [接口文档](docs/接口文档.md)：HTTP、内部服务、事件、哈希和错误码契约。
+- [OpenAPI](contracts/openapi/redblack-oa-v1.openapi.yaml)：当前 V1 机器可读接口快照，V2 开发时同步升级。
+- `docs/archive/`：历史验收与设计材料，不作为当前实现状态证明。
+- `evidence/`：历史命令输出和测试证据，只对对应提交与环境有效。
+
+契约不一致时暂停实现，先更新和评审文档，再同步 OpenAPI、代码、迁移和测试。
+
+## 毕设实施顺序
+
+1. 完成 Java 21 + 联盟链 Java SDK 最小 POC。
+2. 固化链版本、节点数、组织、共识和附件哈希根算法。
+3. 定义 `EvidenceRequested` 事件和不可变附件快照。
+4. 实现 `ApprovalEvidenceRegistry` 合约及合约测试。
+5. 新增 `blockchain-service`、独立数据库、Inbox 和存证状态机。
+6. 接入网关、RBAC、菜单、前端页面和 OpenAPI。
+7. 完成重复事件、篡改、网络中断、回执未知和节点故障实验。
+8. 记录性能分位数、成功率、资源配置和实验限制，形成论文证据。
+
+## 完成口径
+
+只有同时满足以下条件，才能声称联盟链部分完成：
+
+- 合约和链服务源码存在并通过测试。
+- 真实实验网络能够出块并返回交易回执。
+- OA 正式动作能够异步形成链上证据。
+- 交易可通过哈希和区块高度查询。
+- 链下篡改能够被验真发现。
+- 重复事件不会重复上链。
+- 链停机不阻塞 OA，恢复后能够补偿。
+- 权限、隐私字段和密钥边界通过验收。
+- 部署、清理、复现和实验步骤有实际执行证据。
 
