@@ -1,0 +1,33 @@
+{
+  "description": "Public test fixture: APPROVE with two attachments. The 0x11 predecessor represents an earlier, separately frozen SUBMIT record; this fixture alone is not a full chain timeline.",
+  "testKeyHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "source": {
+    "pseudonymKeyId": "test-v1",
+    "applicationId": "10002",
+    "sourceRecordId": "7002",
+    "operatorUserId": "602",
+    "targetUserId": null,
+    "taskId": "9002",
+    "newTaskId": null,
+    "action": "APPROVE",
+    "submissionRound": 1,
+    "fromStatus": "PENDING",
+    "toStatus": "APPROVED",
+    "occurredAt": "2026-09-19T02:03:04.005Z",
+    "previousEvidenceHash": "1111111111111111111111111111111111111111111111111111111111111111",
+    "attachments": [
+      {"fileId": "201", "sha256": "8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8", "sizeBytes": "5"},
+      {"fileId": "202", "sha256": "f44e64e75f3948e9f73f8dfa94721c4ce8cbb4f265c4790c702b2d41cfbf2753", "sizeBytes": "4"}
+    ]
+  },
+  "expected": {
+    "canonicalJson": "{\"schemaVersion\":1,\"evidenceId\":\"2241b79a80e46cb786e2d63fb24ac5193c8c2484f364fa64edf1fd4c623305b8\",\"businessType\":\"LEAVE_APPLICATION\",\"businessIdHash\":\"d15b5f17260fe8d094de1edf8f2b5a9d6caa6a8977532dd0118457a0b5ccb2d5\",\"pseudonymKeyId\":\"test-v1\",\"sourceRecordId\":\"7002\",\"action\":\"APPROVE\",\"submissionRound\":1,\"fromStatus\":\"PENDING\",\"toStatus\":\"APPROVED\",\"operatorSubjectHash\":\"1606ae17e54cce4efc6cb2af48144d025fcc19d54de19c5487cd5d833388b795\",\"targetSubjectHash\":null,\"taskIdHash\":\"9d0171a5ff522975cc16a92467e51fb31e715ad4ce6c35d36802fc2ff7b2373d\",\"newTaskIdHash\":null,\"occurredAt\":\"2026-09-19T02:03:04.005Z\",\"attachmentHashRoot\":\"e3bd0192450cd120f179ca8bb5af51b9683ec460f0551489b1e6f9073ad25951\",\"previousEvidenceHash\":\"1111111111111111111111111111111111111111111111111111111111111111\"}",
+    "canonicalUtf8Length": 786,
+    "merkleLevels": [
+      ["eed9986a3522092708f80b852ee404d58158c6aaa7aa275621d9f945ddc44f4f", "59c1535120727be210ca5d5279b68dbb61ba9af2e96215ad8176f7723ba25730"],
+      ["e3bd0192450cd120f179ca8bb5af51b9683ec460f0551489b1e6f9073ad25951"]
+    ],
+    "attachmentHashRoot": "e3bd0192450cd120f179ca8bb5af51b9683ec460f0551489b1e6f9073ad25951",
+    "evidenceHash": "2ee07cc917965ab7eebc926827641b31883573e2df45882a95d9efa5cbac8bc9"
+  }
+}
