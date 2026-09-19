@@ -8,4 +8,5 @@ target/
 deploy/secrets/
 deploy/frontend/
 deploy/KafkaRoundTripProbe.jar
+.agent-browser/
 
