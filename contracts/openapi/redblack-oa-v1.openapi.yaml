@@ -5,7 +5,7 @@ info:
   description: |
     Red&Black 中小企业 OA V1 通过 gateway-service 暴露的浏览器 HTTP 接口契约。
     项目只在局域网 Linux 虚拟机运行，不包含公网生产部署接口。
-    微服务内部接口与 Kafka 事件契约见 docs/接口文档.md，不属于本 OpenAPI。
+    微服务内部接口与 Kafka 事件不属于本 OpenAPI。
     附件正文保存在阿里云 OSS 私有 Bucket，但浏览器只调用本 OpenAPI 定义的受控文件接口。
     所有 ID 均以十进制字符串传输，所有日期时间均使用包含时区的 ISO 8601 格式。
 servers:
