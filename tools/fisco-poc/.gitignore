@@ -1,7 +1,0 @@
-target/
-runtime/
-conf/
-logs/
-config.toml
-docker-runtime/
-docker-runtime-backup-*/
